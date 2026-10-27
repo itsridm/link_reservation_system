@@ -22,6 +22,40 @@
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
     th { background: #f8f9fa; color: #333; font-weight: bold; }
+
+    /* 3秒間ポップアップ表示するモーダルオーバーレイ */
+    #popupOverlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    #popupOverlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .popup-card {
+      background: #fff;
+      width: 85%;
+      max-width: 380px;
+      padding: 25px 20px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      animation: popUpAnim 0.3s ease;
+    }
+    @keyframes popUpAnim {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .popup-title { font-size: 22px; color: #06c755; font-weight: bold; margin-bottom: 12px; }
+    .popup-detail { font-size: 16px; color: #333; line-height: 1.6; text-align: left; background: #f8f9fa; padding: 12px 15px; border-radius: 8px; margin-bottom: 5px; }
   </style>
 </head>
 <body>
@@ -37,7 +71,7 @@
 
     <!-- 案内中枠の予約者一覧 -->
     <div class="card">
-      <div style="font-weight: bold; margin-bottom: 12px; color: #555;" id="targetSlotTitle">案内中枠の予約者一覧</div>
+      <div style="font-weight: bold; margin-bottom: 12px; color: #555;">案内中枠の予約者一覧</div>
       <table>
         <thead>
           <tr>
@@ -54,13 +88,31 @@
     </div>
   </div>
 
+  <!-- 受付完了ポップアップ（運営画面に3秒間表示） -->
+  <div id="popupOverlay">
+    <div class="popup-card">
+      <div class="popup-title">受付完了！</div>
+      <div class="popup-detail" id="popupContent"></div>
+    </div>
+  </div>
+
   <script>
     const socket = io();
     let globalSlots = [];
     let globalReservations = [];
     let currentSlotIndex = 0;
+    let lastCheckedIds = new Set(); // 以前の受付状態を保持して変更を検知する
 
     socket.on('slots-updated', (data) => {
+      // 新たに「受付済」に変わった予約があるかチェック
+      data.reservations.forEach(newRes => {
+        const oldRes = globalReservations.find(r => r.id === newRes.id);
+        // 新たに受付済みに変わった瞬間を検知
+        if (newRes.checked && (!oldRes || !oldRes.checked)) {
+          showPopup(newRes);
+        }
+      });
+
       globalSlots = data.slots;
       globalReservations = data.reservations;
       currentSlotIndex = data.currentSlotIndex;
@@ -73,8 +125,28 @@
         globalSlots = data.slots;
         globalReservations = data.reservations;
         currentSlotIndex = data.currentSlotIndex;
+        // 初期ロード時はポップアップを出さないように現在受付済みのIDを控えておく
+        data.reservations.forEach(r => { if(r.checked) lastCheckedIds.add(r.id); });
         updateManager();
       });
+
+    // 運営画面の中央に3秒間ポップアップを表示
+    function showPopup(reservation) {
+      const overlay = document.getElementById('popupOverlay');
+      const content = document.getElementById('popupContent');
+      
+      content.innerHTML = `
+        <div><strong>LINE表示名:</strong> ${reservation.displayName || 'ゲスト'}</div>
+        <div><strong>人数:</strong> ${reservation.count || 1}名</div>
+        <div><strong>予約ID:</strong> ${reservation.id}</div>
+      `;
+
+      overlay.classList.add('show');
+
+      setTimeout(() => {
+        overlay.classList.remove('show');
+      }, 3000);
+    }
 
     function updateManager() {
       const currentBanner = document.getElementById('currentBanner');
@@ -92,7 +164,6 @@
       const currentSlot = globalSlots[currentSlotIndex];
       currentTargetTime.innerText = currentSlot.time;
 
-      // 「次の枠へ」ボタンの有効・無効切り替え
       if (currentSlotIndex >= globalSlots.length - 1) {
         nextSlotBtn.innerText = "最後の枠です";
         nextSlotBtn.disabled = true;
@@ -101,7 +172,6 @@
         nextSlotBtn.disabled = false;
       }
 
-      // 現在の枠に紐づく予約を抽出
       const targetReservations = globalReservations.filter(r => r.slotId === currentSlot.id);
       
       tbody.innerHTML = '';

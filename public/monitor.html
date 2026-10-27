@@ -13,7 +13,6 @@
     
     /* 枠リスト */
     .slot-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; background: #fff; }
-    .slot-item.active-slot { border-color: #06c755; background: #eef9f2; box-shadow: 0 0 5px rgba(6,199,85,0.3); }
     .slot-time { font-size: 16px; font-weight: bold; color: #333; }
     .slot-capacity { font-size: 14px; color: #555; }
     
@@ -21,19 +20,12 @@
     .symbol-circle { color: #06c755; }
     .symbol-triangle { color: #ff9800; }
     .symbol-cross { color: #f44336; }
-
-    /* 現在案内中の枠ハイライト表示 */
-    .current-banner { background: #06c755; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 20px; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>『LINK』体験 予約・進行状況</h1>
     
-    <div id="currentBanner" class="current-banner" style="display: none;">
-      現在案内中の枠: <span id="currentTargetTime">-</span>
-    </div>
-
     <div class="card">
       <div style="font-weight: bold; margin-bottom: 12px; color: #555;">予約状況一覧</div>
       <div id="monitorSlotList">読み込み中...</div>
@@ -45,44 +37,28 @@
 
     // データ受信時に画面を更新
     socket.on('slots-updated', (data) => {
-      updateMonitor(data.slots, data.currentSlotIndex);
+      updateMonitor(data.slots);
     });
 
     fetch('/api/data')
       .then(res => res.json())
       .then(data => {
-        updateMonitor(data.slots, data.currentSlotIndex);
+        updateMonitor(data.slots);
       });
 
-    function updateMonitor(slots, currentIndex) {
+    function updateMonitor(slots) {
       const slotList = document.getElementById('monitorSlotList');
-      const currentBanner = document.getElementById('currentBanner');
-      const currentTargetTime = document.getElementById('currentTargetTime');
-      
       slotList.innerHTML = '';
 
       if (slots.length === 0) {
         slotList.innerHTML = '<div style="color: #777; text-align: center; padding: 20px 0;">現在登録されている枠はありません</div>';
-        currentBanner.style.display = 'none';
         return;
       }
 
-      // 現在進行中の枠バナー表示
-      if (slots[currentIndex]) {
-        currentBanner.style.display = 'block';
-        currentTargetTime.innerText = slots[currentIndex].time;
-      } else {
-        currentBanner.style.display = 'none';
-      }
-
-      slots.forEach((slot, index) => {
+      slots.forEach(slot => {
         const remaining = slot.capacity - slot.booked;
         const div = document.createElement('div');
         div.className = 'slot-item';
-
-        if (index === currentIndex) {
-          div.classList.add('active-slot');
-        }
 
         let symbolHtml = '';
         if (remaining >= 2) {
@@ -94,7 +70,7 @@
         }
 
         div.innerHTML = `
-          <span class="slot-time">${slot.time} ${index === currentIndex ? '<strong>(案内中)</strong>' : ''}</span>
+          <span class="slot-time">${slot.time}</span>
           <span class="slot-capacity">残り枠数: ${remaining}/${slot.capacity}</span>
           ${symbolHtml}
         `;

@@ -2,50 +2,23 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>LINK 予約システム</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>『LINK』体験予約のご案内</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
-    .card { border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 8px; }
-    button { background: #06C755; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+    body { font-family: sans-serif; margin: 0; padding: 20px; text-align: center; background: #f4f6f8; }
+    .card { background: white; padding: 30px; max-width: 450px; margin: 40px auto; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .btn-line { background: #06C755; color: white; text-decoration: none; padding: 15px 25px; border-radius: 8px; font-weight: bold; display: inline-block; margin-top: 20px; font-size: 1.1rem; }
+    .hamburger { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; text-decoration: none; color: #333; }
   </style>
 </head>
 <body>
-  <h1>『LINK』体験予約</h1>
-  <h2>予約可能枠</h2>
-  <div id="slots-container"></div>
-  <hr>
-  <h2>【管理者用】枠追加</h2>
-  <input type="text" id="slot-time" placeholder="例: 10:00 - 10:30">
-  <input type="number" id="slot-cap" placeholder="定員" value="5">
-  <button onclick="addSlot()">枠作成</button>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
-    socket.on('slots-updated', (slots) => {
-      const container = document.getElementById('slots-container');
-      container.innerHTML = '';
-      slots.forEach(slot => {
-        const isFull = slot.booked >= slot.capacity;
-        container.innerHTML += `
-          <div class="card">
-            <h3>${slot.time}</h3>
-            <p>残り: ${slot.capacity - slot.booked} / ${slot.capacity}</p>
-            <button onclick="reserve(${slot.id})" ${isFull ? 'disabled' : ''}>${isFull ? '満員' : '予約する'}</button>
-          </div>
-        `;
-      });
-    });
-    async function reserve(slotId) {
-      const res = await fetch('/api/reserve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slotId }) });
-      const data = await res.json();
-      if (data.success) alert('予約完了！');
-    }
-    async function addSlot() {
-      const time = document.getElementById('slot-time').value;
-      const capacity = document.getElementById('slot-cap').value;
-      await fetch('/api/admin/slots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ time, capacity }) });
-    }
-  </script>
+  <a href="/admin/login" class="hamburger">☰</a>
+  <div class="card">
+    <h1>『LINK』体験予約</h1>
+    <p>体験の予約には公式LINEの友達追加が必要です。</p>
+    <p>下のボタンから公式LINEを追加し、リッチメニューの「予約する」からご予約ください！</p>
+    <!-- あなたのLINE公式アカウントの友達追加URLに書き換えてください -->
+    <a href="https://lin.ee/YOUR_LINE_OFFICIAL_ACCOUNT" class="btn-line">公式LINEを追加して予約する</a>
+  </div>
 </body>
 </html>

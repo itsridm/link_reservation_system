@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LINK 運営コントロールパネル</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: auto; background: #fafafa; }
+    .nav-btns { display: flex; gap: 10px; margin-bottom: 20px; }
+    .nav-btns a, .nav-btns button { padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 6px; text-decoration: none; cursor: pointer; font-weight: bold; }
+    .section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ddd; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #eee; padding: 8px; text-align: left; }
+    .btn-danger { background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>運営・管理者ダッシュボード</h2>
+  <div class="nav-btns">
+    <a href="/monitor" target="_blank">予約状況表示（モニター）を開く</a>
+    <button onclick="nextSlot()" style="background: #28a745;">次の枠へ進行 ➔</button>
+  </div>
+
+  <div class="section">
+    <h3>進行状態</h3>
+    <p id="current-slot-info">現在の進行枠: 読み込み中...</p>
+  </div>
+
+  <div class="section">
+    <h3>新しい時間枠を作成</h3>
+    <input type="text" id="slot-time" placeholder="例: 10:00 - 10:30">
+    <input type="number" id="slot-cap" placeholder="定員" value="5" style="width: 60px;">
+    <button onclick="addSlot()">枠作成</button>
+  </div>
+
+  <div class="section">
+    <h3>枠・予約状況一覧</h3>
+    <div id="slots-list"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    if (sessionStorage.getItem('adminAuth') !== 'true') {
+      location.href = '/admin/login';
+    }
+
+    const socket = io();
+    socket.on('slots-updated', (data) => updateUI(data));
+
+    fetch('/api/data').then(res => res.json()).then(data => updateUI(data));
+
+    function updateUI(data) {
+      const { slots, reservations, currentSlotIndex } = data;
+      
+      const currentSlot = slots[currentSlotIndex];
+      document.getElementById('current-slot-info').innerText = currentSlot 
+        ? `現在の枠 [${currentSlotIndex + 1}/${slots.length}]: ${currentSlot.time}`
+        : '進行中の枠はありません';
+
+      const container = document.getElementById('slots-list');
+      if (!slots || slots.length === 0) {
+        container.innerHTML = '<p>枠がありません。</p>';
+        return;
+      }
+
+      let html = '';
+      slots.forEach((s, idx) => {
+        const slotRes = reservations.filter(r => r.slotId === s.id);
+        const isCurrent = idx === currentSlotIndex;
+        html += `
+          <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px; border-radius:6px; background:${isCurrent ? '#e7f3ff' : '#fff'}">
+            <h4>${s.time} (予約: ${s.booked}/${s.capacity}) ${isCurrent ? '★進行中' : ''}
+              <button class="btn-danger" onclick="deleteSlot(${s.id})" style="float:right;">枠削除</button>
+            </h4>
+            <table>
+              <tr><th>LINE表示名</th><th>予約ID</th><th>操作</th></tr>
+              ${slotRes.map(r => `
+                <tr>
+                  <td>${r.displayName}</td>
+                  <td>${r.id}</td>
+                  <td><button class="btn-danger" onclick="deleteRes(${r.id})">キャンセル</button></td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    async function addSlot() {
+      const time = document.getElementById('slot-time').value;
+      const capacity = document.getElementById('slot-cap').value;
+      if (!time) return alert('時間を入力してください');
+      await fetch('/api/admin/slots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ time, capacity })
+      });
+      document.getElementById('slot-time').value = '';
+    }
+
+    async function deleteSlot(id) {
+      if (!confirm('本当に削除しますか？')) return;
+      await fetch(`/api/admin/slots/${id}`, { method: 'DELETE' });
+    }
+
+    async function deleteRes(id) {
+      if (!confirm('予約をキャンセルしますか？')) return;
+      await fetch(`/api/admin/reservations/${id}`, { method: 'DELETE' });
+    }
+
+    async function nextSlot() {
+      await fetch('/api/admin/next-slot', { method: 'POST' });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LINK 予約ページ</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; background: #f9f9f9; }
+    .card { background: white; padding: 15px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #ddd; }
+    button { background: #06C755; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .hamburger { position: absolute; top: 15px; right: 20px; font-size: 24px; text-decoration: none; color: #333; }
+    #user-status { font-size: 0.9rem; color: #666; margin-bottom: 15px; }
+  </style>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <a href="/admin/login" class="hamburger">☰</a>
+  <h2>『LINK』予約画面</h2>
+  <div id="user-status">LINE連携確認中...</div>
+
+  <div id="slots-container">読み込み中...</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    let lineUserId = null;
+    let lineDisplayName = "ゲスト";
+
+    async function initLiff() {
+      try {
+        // ※ ご自身の LIFF ID を設定してください
+        await liff.init({ liffId: "YOUR_LIFF_ID" });
+        if (!liff.isLoggedIn()) {
+          liff.login();
+        } else {
+          const profile = await liff.getProfile();
+          lineUserId = profile.userId;
+          lineDisplayName = profile.displayName;
+          document.getElementById('user-status').innerText = `ログイン中: ${profile.displayName} さん`;
+        }
+      } catch (e) {
+        document.getElementById('user-status').innerText = '※ ブラウザからテスト閲覧中';
+      }
+    }
+    initLiff();
+
+    const socket = io();
+    socket.on('slots-updated', (data) => renderSlots(data.slots));
+
+    fetch('/api/data').then(res => res.json()).then(data => renderSlots(data.slots));
+
+    function renderSlots(slots) {
+      const container = document.getElementById('slots-container');
+      if (!slots || slots.length === 0) {
+        container.innerHTML = '<p>現在予約できる枠はありません。</p>';
+        return;
+      }
+      container.innerHTML = '';
+      slots.forEach(slot => {
+        const isFull = slot.booked >= slot.capacity;
+        container.innerHTML += `
+          <div class="card">
+            <h3>${slot.time}</h3>
+            <p>残り: ${slot.capacity - slot.booked} / ${slot.capacity} 枠</p>
+            <button onclick="reserve(${slot.id})" ${isFull ? 'disabled' : ''}>
+              ${isFull ? '満員' : 'この時間帯を予約する'}
+            </button>
+          </div>
+        `;
+      });
+    }
+
+    async function reserve(slotId) {
+      const res = await fetch('/api/reserve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotId, userId: lineUserId, displayName: lineDisplayName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('予約が完了しました！');
+      } else {
+        alert(data.error);
+      }
+    }
+  </script>
+</body>
+</html>

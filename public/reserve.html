@@ -16,14 +16,14 @@
     /* 枠アイテム */
     .slot-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; cursor: pointer; background: #fff; transition: background 0.2s; }
     .slot-item:hover { background: #f9f9f9; }
-    .slot-item.disabled { opacity: 0.4; background: #f0f0f0; cursor: not-allowed; }
+    .slot-item.disabled { opacity: 0.5; background: #f0f0f0; cursor: not-allowed; }
     .slot-time { font-size: 15px; font-weight: bold; color: #333; }
     .slot-capacity { font-size: 14px; color: #555; }
     
     .symbol-info { font-size: 15px; font-weight: bold; }
     .symbol-circle { color: #06c755; }
     .symbol-triangle { color: #ff9800; }
-    .symbol-cross { color: #f44336; }
+    .symbol-cross { color: #f44336; font-size: 18px; }
 
     /* 入力・ボタン類 */
     select, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
@@ -31,7 +31,6 @@
     button:disabled { background: #ccc; cursor: not-allowed; }
     .btn-secondary { background: #757575; margin-top: 8px; }
     
-    /* 確認画面の枠 */
     .summary-box { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 15px; margin-bottom: 15px; line-height: 1.8; }
     .result { margin-top: 15px; padding: 15px; border-radius: 8px; background: #eef9f2; color: #155724; font-size: 15px; }
   </style>
@@ -83,13 +82,10 @@
     let selectedSlot = null;
     let selectedCount = 1;
 
-    // LIFF初期化
     async function initLIFF() {
       const userStatusDiv = document.getElementById('userStatus');
       try {
-        // ★ご自身のLIFF IDに書き換えてください
-        await liff.init({ liffId: "2012246919-cYjIOJwZ" });
-
+        await liff.init({ liffId: "YOUR_LIFF_ID" });
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
           currentUserId = profile.userId;
@@ -99,13 +95,11 @@
           userStatusDiv.innerText = "※ブラウザから閲覧中（LINE通知は届きません）";
         }
       } catch (err) {
-        console.error("LIFFエラー:", err);
         userStatusDiv.innerText = "※LINE連携未完了（ブラウザ閲覧）";
       }
     }
     initLIFF();
 
-    // 枠データ受信
     socket.on('slots-updated', (data) => {
       globalSlots = data.slots;
       renderSlots();
@@ -118,7 +112,6 @@
         renderSlots();
       });
 
-    // 1. 枠一覧の描画（時間・残り枠数・記号）
     function renderSlots() {
       const slotList = document.getElementById('slotList');
       slotList.innerHTML = '';
@@ -133,23 +126,25 @@
         const div = document.createElement('div');
         div.className = 'slot-item';
 
+        let capacityText = `残り枠数: ${remaining}/${slot.capacity}`;
         let symbolHtml = '';
+
         if (remaining >= 2) {
           symbolHtml = `<span class="symbol-info symbol-circle">〇</span>`;
         } else if (remaining === 1) {
           symbolHtml = `<span class="symbol-info symbol-triangle">△</span>`;
         } else {
-          symbolHtml = `<span class="symbol-info symbol-cross" style="font-size: 13px;">キャンセル待ち</span>`;
-          div.classList.add('disabled'); // 満員の場合は薄くする
+          capacityText = `キャンセル待ち`;
+          symbolHtml = `<span class="symbol-info symbol-cross">✕</span>`;
+          div.classList.add('disabled');
         }
 
         div.innerHTML = `
           <span class="slot-time">${slot.time}</span>
-          <span class="slot-capacity">残り枠数: ${remaining}/${slot.capacity}</span>
+          <span class="slot-capacity">${capacityText}</span>
           ${symbolHtml}
         `;
 
-        // 空きがある場合のみクリックイベントを設定してステップ2へ
         if (remaining > 0) {
           div.addEventListener('click', () => {
             selectedSlot = slot;
@@ -161,7 +156,6 @@
       });
     }
 
-    // 2. ステップ2（人数選択）画面へ遷移
     function goToStep2(maxAvailable) {
       document.getElementById('step1').style.display = 'none';
       document.getElementById('step2').style.display = 'block';
@@ -192,7 +186,6 @@
       };
     }
 
-    // ステップ2 ➔ ステップ3（確認画面）へ進む
     document.getElementById('toStep3Btn').onclick = () => {
       document.getElementById('step2').style.display = 'none';
       document.getElementById('step3').style.display = 'block';
@@ -200,20 +193,17 @@
       document.getElementById('summaryCount').innerText = selectedCount;
     };
 
-    // ステップ2 ➔ ステップ1 へ戻る
     document.getElementById('backToStep1Btn').onclick = () => {
       document.getElementById('step2').style.display = 'none';
       document.getElementById('step1').style.display = 'block';
       selectedSlot = null;
     };
 
-    // ステップ3 ➔ ステップ2 へ戻る
     document.getElementById('backToStep2Btn').onclick = () => {
       document.getElementById('step3').style.display = 'none';
       document.getElementById('step2').style.display = 'block';
     };
 
-    // 予約確定ボタン押下処理
     document.getElementById('confirmBtn').onclick = async () => {
       const confirmBtn = document.getElementById('confirmBtn');
       confirmBtn.disabled = true;

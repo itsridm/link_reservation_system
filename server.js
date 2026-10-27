@@ -61,8 +61,22 @@ app.delete('/api/admin/slots/:id', (req, res) => {
   const id = parseInt(req.params.id);
   slots = slots.filter(s => s.id !== id);
   reservations = reservations.filter(r => r.slotId !== id);
+  if (currentSlotIndex >= slots.length && slots.length > 0) {
+    currentSlotIndex = slots.length - 1;
+  }
   io.emit('slots-updated', { slots, reservations, currentSlotIndex });
   res.json({ success: true });
+});
+
+// API: 次の枠へ進む
+app.post('/api/admin/next-slot', (req, res) => {
+  if (currentSlotIndex < slots.length - 1) {
+    currentSlotIndex++;
+    io.emit('slots-updated', { slots, reservations, currentSlotIndex });
+    res.json({ success: true, currentSlotIndex });
+  } else {
+    res.json({ success: false, error: 'これ以上先の枠はありません' });
+  }
 });
 
 // API: 受付状態の更新（チェックイン）

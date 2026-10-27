@@ -24,6 +24,7 @@ app.get('/reserve', (req, res) => res.sendFile(__dirname + '/public/reserve.html
 app.get('/monitor', (req, res) => res.sendFile(__dirname + '/public/monitor.html'));
 app.get('/admin/login', (req, res) => res.sendFile(__dirname + '/public/admin-login.html'));
 app.get('/admin', (req, res) => res.sendFile(__dirname + '/public/admin.html'));
+app.get('/manager', (req, res) => res.sendFile(__dirname + '/public/manager.html'));
 
 // API: 枠・予約データ取得
 app.get('/api/data', (req, res) => {

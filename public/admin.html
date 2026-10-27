@@ -3,115 +3,152 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LINK 運営コントロールパネル</title>
+  <title>『LINK』体験予約 - 管理者画面</title>
+  <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: auto; background: #fafafa; }
-    .nav-btns { display: flex; gap: 10px; margin-bottom: 20px; }
-    .nav-btns a, .nav-btns button { padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 6px; text-decoration: none; cursor: pointer; font-weight: bold; }
-    .section { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ddd; }
+    body { font-family: sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    h1 { font-size: 20px; color: #333; margin-bottom: 20px; text-align: center; }
+    h2 { font-size: 16px; color: #333; margin-bottom: 12px; }
+    
+    /* フォーム・ボタン */
+    .form-group { display: flex; gap: 10px; margin-bottom: 15px; }
+    input { padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; flex: 1; }
+    button { padding: 10px 20px; background: #06c755; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    button:hover { background: #05b34c; }
+    .btn-danger { background: #dc3545; padding: 6px 12px; font-size: 13px; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-manager { background: #007bff; display: inline-block; text-decoration: none; text-align: center; margin-bottom: 15px; }
+    .btn-manager:hover { background: #0056b3; }
+
+    /* 予約枠一覧リスト */
+    .slot-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 8px; background: #fafafa; }
+    
+    /* 予約一覧テーブル */
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #eee; padding: 8px; text-align: left; }
-    .btn-danger { background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
+    th { background: #f8f9fa; color: #333; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2>運営・管理者ダッシュボード</h2>
-  <div class="nav-btns">
-    <a href="/monitor" target="_blank">予約状況表示（モニター）を開く</a>
-    <button onclick="nextSlot()" style="background: #28a745;">次の枠へ進行 ➔</button>
+  <div class="container">
+    <h1>『LINK』体験予約 - 管理者ダッシュボード</h1>
+
+    <!-- 運営者画面へのボタン -->
+    <a href="/manager" class="btn-manager" target="_blank">運営者画面を開く</a>
+
+    <!-- 枠管理カード -->
+    <div class="card">
+      <h2>予約枠の追加</h2>
+      <div class="form-group">
+        <input type="text" id="slotTime" placeholder="例: 10:00-10:15">
+        <input type="number" id="slotCapacity" placeholder="定員数 (例: 4)" value="4">
+        <button id="addSlotBtn">枠を追加</button>
+      </div>
+      <h2>登録中の枠一覧</h2>
+      <div id="adminSlotList">読み込み中...</div>
+    </div>
+
+    <!-- 予約一覧カード -->
+    <div class="card">
+      <h2>予約一覧</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>予約時間</th>
+            <th>LINE表示名</th>
+            <th>予約ID</th>
+            <th>受付状況</th>
+            <th>人数</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="reservationTableBody">
+          <tr><td colspan="6" style="text-align: center; color: #777;">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <div class="section">
-    <h3>進行状態</h3>
-    <p id="current-slot-info">現在の進行枠: 読み込み中...</p>
-  </div>
-
-  <div class="section">
-    <h3>新しい時間枠を作成</h3>
-    <input type="text" id="slot-time" placeholder="例: 10:00 - 10:30">
-    <input type="number" id="slot-cap" placeholder="定員" value="5" style="width: 60px;">
-    <button onclick="addSlot()">枠作成</button>
-  </div>
-
-  <div class="section">
-    <h3>枠・予約状況一覧</h3>
-    <div id="slots-list"></div>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
   <script>
-    if (sessionStorage.getItem('adminAuth') !== 'true') {
-      location.href = '/admin/login';
-    }
-
     const socket = io();
-    socket.on('slots-updated', (data) => updateUI(data));
 
-    fetch('/api/data').then(res => res.json()).then(data => updateUI(data));
+    socket.on('slots-updated', (data) => {
+      renderAdmin(data.slots, data.reservations);
+    });
 
-    function updateUI(data) {
-      const { slots, reservations, currentSlotIndex } = data;
-      
-      const currentSlot = slots[currentSlotIndex];
-      document.getElementById('current-slot-info').innerText = currentSlot 
-        ? `現在の枠 [${currentSlotIndex + 1}/${slots.length}]: ${currentSlot.time}`
-        : '進行中の枠はありません';
+    fetch('/api/data')
+      .then(res => res.json())
+      .then(data => {
+        renderAdmin(data.slots, data.reservations);
+      });
 
-      const container = document.getElementById('slots-list');
-      if (!slots || slots.length === 0) {
-        container.innerHTML = '<p>枠がありません。</p>';
-        return;
+    function renderAdmin(slots, reservations) {
+      // 枠一覧の描画
+      const adminSlotList = document.getElementById('adminSlotList');
+      adminSlotList.innerHTML = '';
+      if (slots.length === 0) {
+        adminSlotList.innerHTML = '<div style="color: #777; padding: 10px 0;">登録されている枠はありません</div>';
+      } else {
+        slots.forEach(slot => {
+          const div = document.createElement('div');
+          div.className = 'slot-item';
+          div.innerHTML = `
+            <span><strong>${slot.time}</strong> (定員: ${slot.capacity}名 / 予約済: ${slot.booked}名)</span>
+            <button class="btn-danger" onclick="deleteSlot(${slot.id})">削除</button>
+          `;
+          adminSlotList.appendChild(div);
+        });
       }
 
-      let html = '';
-      slots.forEach((s, idx) => {
-        const slotRes = reservations.filter(r => r.slotId === s.id);
-        const isCurrent = idx === currentSlotIndex;
-        html += `
-          <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px; border-radius:6px; background:${isCurrent ? '#e7f3ff' : '#fff'}">
-            <h4>${s.time} (予約: ${s.booked}/${s.capacity}) ${isCurrent ? '★進行中' : ''}
-              <button class="btn-danger" onclick="deleteSlot(${s.id})" style="float:right;">枠削除</button>
-            </h4>
-            <table>
-              <tr><th>LINE表示名</th><th>予約ID</th><th>操作</th></tr>
-              ${slotRes.map(r => `
-                <tr>
-                  <td>${r.displayName}</td>
-                  <td>${r.id}</td>
-                  <td><button class="btn-danger" onclick="deleteRes(${r.id})">キャンセル</button></td>
-                </tr>
-              `).join('')}
-            </table>
-          </div>
-        `;
-      });
-      container.innerHTML = html;
+      // 予約一覧テーブルの描画
+      const tbody = document.getElementById('reservationTableBody');
+      tbody.innerHTML = '';
+      if (reservations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #777;">現在予約はありません</td></tr>';
+      } else {
+        reservations.forEach(resv => {
+          const slot = slots.find(s => s.id === resv.slotId);
+          const timeStr = slot ? slot.time : '不明な枠';
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${timeStr}</td>
+            <td>${resv.displayName || 'ゲスト'}</td>
+            <td>${resv.id}</td>
+            <td><span style="color: #666;">未受付</span></td>
+            <td>${resv.count || 1}名</td>
+            <td><button class="btn-danger" onclick="deleteReservation(${resv.id})">削除</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
     }
 
-    async function addSlot() {
-      const time = document.getElementById('slot-time').value;
-      const capacity = document.getElementById('slot-cap').value;
+    // 枠追加
+    document.getElementById('addSlotBtn').onclick = async () => {
+      const time = document.getElementById('slotTime').value.trim();
+      const capacity = document.getElementById('slotCapacity').value;
       if (!time) return alert('時間を入力してください');
+
       await fetch('/api/admin/slots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ time, capacity })
       });
-      document.getElementById('slot-time').value = '';
-    }
+      document.getElementById('slotTime').value = '';
+    };
 
+    // 枠削除
     async function deleteSlot(id) {
-      if (!confirm('本当に削除しますか？')) return;
+      if (!confirm('この枠を削除しますか？')) return;
       await fetch(`/api/admin/slots/${id}`, { method: 'DELETE' });
     }
 
-    async function deleteRes(id) {
-      if (!confirm('予約をキャンセルしますか？')) return;
+    // 予約削除
+    async function deleteReservation(id) {
+      if (!confirm('この予約を削除しますか？')) return;
       await fetch(`/api/admin/reservations/${id}`, { method: 'DELETE' });
-    }
-
-    async function nextSlot() {
-      await fetch('/api/admin/next-slot', { method: 'POST' });
     }
   </script>
 </body>

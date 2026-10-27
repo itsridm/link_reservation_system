@@ -3,256 +3,142 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LINK 予約ページ</title>
+  <title>『LINK』体験予約</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; background: #f9f9f9; color: #333; }
-    h2 { text-align: center; margin-bottom: 25px; }
-    #user-status { font-size: 0.9rem; color: #666; margin-bottom: 20px; text-align: center; }
-    
-    /* カードのデザイン */
-    .card { 
-      background: white; 
-      padding: 20px; 
-      margin-bottom: 15px; 
-      border-radius: 12px; 
-      border: 2px solid #eee; 
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
-      cursor: pointer; 
-      transition: all 0.2s;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .card:hover:not(.full) { border-color: #06C755; transform: translateY(-2px); }
-    .card.full { opacity: 0.4; background: #f1f1f1; cursor: not-allowed; border-color: #ddd; }
-    
-    .slot-info .time { font-size: 1.4rem; font-weight: bold; margin-bottom: 5px; }
-    .slot-info .count { font-size: 0.9rem; color: #666; }
-    
-    .status-badge { font-size: 1.8rem; font-weight: bold; }
-    .status-circle { color: #28a745; }
-    .status-triangle { color: #ffc107; }
-    .status-cross { color: #dc3545; }
-
-    /* ステップ画面共通スタイル */
-    .step-box {
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      text-align: center;
-      display: none;
-    }
-    .step-box h3 { margin-top: 0; color: #06C755; }
-    .step-box p { font-size: 1.1rem; margin: 15px 0; color: #555; white-space: pre-line; }
-    
-    select {
-      width: 100%;
-      padding: 12px;
-      font-size: 1.1rem;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      margin-bottom: 25px;
-      background: #fff;
-    }
-
-    .step-btns { display: flex; gap: 10px; justify-content: center; }
-    .step-btns button {
-      flex: 1;
-      padding: 12px;
-      border: none;
-      border-radius: 6px;
-      font-weight: bold;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    .btn-back { background: #e0e0e0; color: #333; }
-    .btn-next, .btn-confirm { background: #06C755; color: white; }
-
-    .hamburger { position: absolute; top: 15px; right: 20px; font-size: 24px; text-decoration: none; color: #333; }
+    body { font-family: sans-serif; background: #f4f6f8; margin: 0; padding: 15px; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
+    h2 { margin-top: 0; color: #333; }
+    .user-info { font-weight: bold; color: #06c755; margin-bottom: 15px; }
+    label { display: block; margin-top: 15px; font-weight: bold; }
+    select, button { width: 100%; padding: 12px; margin-top: 8px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+    button { background: #06c755; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 20px; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .result { margin-top: 20px; padding: 15px; border-radius: 8px; background: #eef9f2; color: #155724; display: none; }
   </style>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body>
-  <a href="/admin/login" class="hamburger">☰</a>
-  <h2>『LINK』体験予約</h2>
-  <div id="user-status">LINE連携確認中...</div>
+  <div class="card">
+    <h2>『LINK』体験予約</h2>
+    <div id="userStatus" class="user-info">LINE連携確認中...</div>
 
-  <!-- ① 枠一覧画面 -->
-  <div id="slots-view">
-    <div id="slots-container">読み込み中...</div>
+    <form id="reserveForm">
+      <label for="slotSelect">予約枠を選択</label>
+      <select id="slotSelect" required>
+        <option value="">枠を選択してください</option>
+      </select>
+
+      <button type="submit" id="submitBtn">予約を確定する</button>
+    </form>
+
+    <div id="resultBox" class="result"></div>
   </div>
 
-  <!-- ② 人数選択画面 -->
-  <div id="step-count-view" class="step-box">
-    <h3>人数選択</h3>
-    <p id="selected-slot-time-text"></p>
-    <label for="p-count">ご予約人数を選んでください</label>
-    <select id="p-count"></select>
-    <div class="step-btns">
-      <button class="btn-back" onclick="backToSlots()">戻る</button>
-      <button class="btn-next" onclick="goToConfirm()">確認画面へ</button>
-    </div>
-  </div>
-
-  <!-- ③ 予約確認画面 -->
-  <div id="step-confirm-view" class="step-box">
-    <h3>予約確認</h3>
-    <p id="confirm-text"></p>
-    <div class="step-btns">
-      <button class="btn-back" onclick="backToCount()">戻る</button>
-      <button class="btn-confirm" onclick="confirmReservation()">予約を確定する</button>
-    </div>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
   <script>
-    let lineUserId = null;
-    let lineDisplayName = "ゲスト";
-    let slotsData = [];
-    let selectedSlot = null;
-    let selectedCount = 1;
+    const socket = io();
+    let currentUserId = "";
+    let currentDisplayName = "";
 
-    async function initLiff() {
+    // 1. LIFF初期化 & ユーザー情報取得
+    async function initLIFF() {
+      const userStatusDiv = document.getElementById('userStatus');
       try {
-        await liff.init({ liffId: "2012246919-cYjIOJwZ" });
-        if (!liff.isLoggedIn()) {
-          liff.login();
-        } else {
+        // ※ご自身の実際のLIFF ID（例: "2012246919-xxxxxxx"）に書き換えてください
+        await liff.init({ liffId: "YOUR_LIFF_ID" });
+
+        if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
-          lineUserId = profile.userId;
-          lineDisplayName = profile.displayName;
-          document.getElementById('user-status').innerText = `ログイン中: ${profile.displayName} さん`;
+          currentUserId = profile.userId;
+          currentDisplayName = profile.displayName;
+          userStatusDiv.innerText = `ログイン中: ${currentDisplayName}さん`;
+        } else {
+          // LIFF環境外（ブラウザ直接アクセス等）の場合
+          userStatusDiv.innerText = "※ブラウザから閲覧中（LINE通知は届きません）";
+          // 必要であれば自動ログインを促す場合は liff.login(); を呼ぶ
         }
-      } catch (e) {
-        document.getElementById('user-status').innerText = '※ ブラウザからテスト閲覧中';
+      } catch (err) {
+        console.error("LIFF初期化エラー:", err);
+        userStatusDiv.innerText = "※LINE情報の取得に失敗しました";
       }
     }
-    initLiff();
 
-    const socket = io();
+    initLIFF();
 
-    function loadSlots() {
-      fetch('/api/data')
-        .then(res => res.json())
-        .then(data => {
-          slotsData = data.slots;
-          renderSlots(slotsData);
-        });
-    }
-
-    loadSlots();
+    // 2. 枠データの受信 & 描画
+    let globalSlots = [];
     socket.on('slots-updated', (data) => {
-      slotsData = data.slots;
-      renderSlots(slotsData);
+      globalSlots = data.slots;
+      renderSlots();
     });
 
-    function renderSlots(slots) {
-      const container = document.getElementById('slots-container');
-      if (!slots || slots.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color:#666;">現在予約できる枠はありません。</p>';
-        return;
-      }
-      container.innerHTML = '';
-      slots.forEach(slot => {
-        const remaining = slot.capacity - slot.booked;
-        const isFull = remaining <= 0;
-
-        let symbol, colorClass, countText;
-        if (isFull) {
-          symbol = '✕';
-          colorClass = 'status-cross';
-          countText = 'キャンセル待ち';
-        } else if (remaining <= 3) {
-          symbol = '△';
-          colorClass = 'status-triangle';
-          countText = `残り枠数: ${remaining} / ${slot.capacity}`;
-        } else {
-          symbol = '〇';
-          colorClass = 'status-circle';
-          countText = `残り枠数: ${remaining} / ${slot.capacity}`;
-        }
-
-        container.innerHTML += `
-          <div class="card ${isFull ? 'full' : ''}" ${isFull ? '' : `onclick="selectSlot(${slot.id})"`}>
-            <div class="slot-info">
-              <div class="time">${slot.time}</div>
-              <div class="count">${countText}</div>
-            </div>
-            <div class="status-badge ${colorClass}">${symbol}</div>
-          </div>
-        `;
+    fetch('/api/data')
+      .then(res => res.json())
+      .then(data => {
+        globalSlots = data.slots;
+        renderSlots();
       });
-    }
 
-    function selectSlot(slotId) {
-      selectedSlot = slotsData.find(s => s.id === slotId);
-      if (!selectedSlot) return;
+    function renderSlots() {
+      const select = document.getElementById('slotSelect');
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">枠を選択してください</option>';
 
-      const remaining = selectedSlot.capacity - selectedSlot.booked;
-      document.getElementById('selected-slot-time-text').innerText = `${selectedSlot.time}\n（残り枠数: ${remaining}）`;
-      
-      // 人数選択のドロップダウンを動的に生成
-      const selectElem = document.getElementById('p-count');
-      selectElem.innerHTML = '';
-      for (let i = 1; i <= remaining; i++) {
-        selectElem.innerHTML += `<option value="${i}">${i} 名</option>`;
-      }
-
-      // 画面切り替え
-      document.getElementById('slots-view').style.display = 'none';
-      document.getElementById('step-count-view').style.display = 'block';
-    }
-
-    function backToSlots() {
-      document.getElementById('step-count-view').style.display = 'none';
-      document.getElementById('slots-view').style.display = 'block';
-    }
-
-    function goToConfirm() {
-      const selectElem = document.getElementById('p-count');
-      selectedCount = parseInt(selectElem.value);
-
-      document.getElementById('confirm-text').innerText = 
-        `【予約時間】\n${selectedSlot.time}\n\n【予約人数】\n${selectedCount} 名\n\nこちらの内容で予約を確定しますか？`;
-
-      document.getElementById('step-count-view').style.display = 'none';
-      document.getElementById('step-confirm-view').style.display = 'block';
-    }
-
-    function backToCount() {
-      document.getElementById('step-confirm-view').style.display = 'none';
-      document.getElementById('step-count-view').style.display = 'block';
-    }
-
-    async function confirmReservation() {
-      // 複数名分の予約を連打・ループで登録
-      try {
-        for (let i = 0; i < selectedCount; i++) {
-          const res = await fetch('/api/reserve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              slotId: selectedSlot.id, 
-              userId: lineUserId, 
-              displayName: selectedCount > 1 ? `${lineDisplayName} (他${selectedCount-1}名)` : lineDisplayName 
-            })
-          });
-          const data = await res.json();
-          if (!data.success) {
-            alert(data.error || '予約途中でエラーが発生しました');
-            location.reload();
-            return;
-          }
+      globalSlots.forEach(slot => {
+        const remaining = slot.capacity - slot.booked;
+        const option = document.createElement('option');
+        option.value = slot.id;
+        
+        if (remaining <= 0) {
+          option.textContent = `${slot.time} (満員 - キャンセル待ち)`;
+          option.disabled = true;
+        } else {
+          option.textContent = `${slot.time} (残り ${remaining} 名)`;
         }
-        alert('予約が完了しました！');
-        document.getElementById('step-confirm-view').style.display = 'none';
-        document.getElementById('slots-view').style.display = 'block';
-        loadSlots();
-      } catch (e) {
-        alert('通信エラーが発生しました。');
-      }
+        select.appendChild(option);
+      });
+
+      if (currentVal) select.value = currentVal;
     }
+
+    // 3. 予約リクエスト送信
+    document.getElementById('reserveForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const slotId = document.getElementById('slotSelect').value;
+      const submitBtn = document.getElementById('submitBtn');
+      const resultBox = document.getElementById('resultBox');
+
+      if (!slotId) return alert("枠を選択してください");
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = "処理中...";
+
+      try {
+        const res = await fetch('/api/reserve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slotId: slotId,
+            userId: currentUserId,           // ★ここがサーバーへ送られます！
+            displayName: currentDisplayName
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          resultBox.style.display = 'block';
+          resultBox.innerHTML = `<strong>予約が完了しました！</strong><br>予約ID: ${data.reservation.id}<br>LINEトーク画面をご確認ください。`;
+          document.getElementById('reserveForm').reset();
+        } else {
+          alert("予約エラー: " + data.error);
+        }
+      } catch (err) {
+        alert("通信エラーが発生しました");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "予約を確定する";
+      }
+    });
   </script>
 </body>
 </html>

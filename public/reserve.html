@@ -17,7 +17,9 @@
     .slot-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; cursor: pointer; background: #fff; transition: background 0.2s; }
     .slot-item:hover { background: #f9f9f9; }
     .slot-item.disabled { opacity: 0.4; background: #f0f0f0; cursor: not-allowed; }
-    .slot-time { font-size: 16px; font-weight: bold; color: #333; }
+    .slot-time { font-size: 15px; font-weight: bold; color: #333; }
+    .slot-capacity { font-size: 14px; color: #555; font-weight: bold; }
+    
     .symbol-info { font-size: 15px; font-weight: bold; }
     .symbol-circle { color: #06c755; }
     .symbol-triangle { color: #ff9800; }
@@ -116,7 +118,7 @@
         renderSlots();
       });
 
-    // 1. 枠一覧の描画（記号ステータス 〇 / △ / ✕）
+    // 1. 枠一覧の描画（時間・空き枠・記号の順、0の場合はキャンセル待ち）
     function renderSlots() {
       const slotList = document.getElementById('slotList');
       slotList.innerHTML = '';
@@ -133,15 +135,19 @@
 
         let symbolHtml = '';
         if (remaining >= 4) {
-          symbolHtml = `<span class="symbol-info symbol-circle">〇 (空き ${remaining}枠)</span>`;
+          symbolHtml = `<span class="symbol-info symbol-circle">〇</span>`;
         } else if (remaining >= 1) {
-          symbolHtml = `<span class="symbol-info symbol-triangle">△ (残 ${remaining}枠)</span>`;
+          symbolHtml = `<span class="symbol-info symbol-triangle">△</span>`;
         } else {
-          symbolHtml = `<span class="symbol-info symbol-cross">✕ (満員)</span>`;
-          div.classList.add('disabled'); // 空きがない場合は薄くする
+          symbolHtml = `<span class="symbol-info symbol-cross" style="font-size: 13px;">キャンセル待ち</span>`;
+          div.classList.add('disabled'); // 満員の場合は薄くする
         }
 
-        div.innerHTML = `<span class="slot-time">${slot.time}</span>${symbolHtml}`;
+        div.innerHTML = `
+          <span class="slot-time">${slot.time}</span>
+          <span class="slot-capacity">${slot.booked}/${slot.capacity}</span>
+          ${symbolHtml}
+        `;
 
         // 空きがある場合のみクリックイベントを設定してステップ2へ
         if (remaining > 0) {
@@ -166,7 +172,6 @@
       
       countSelect.innerHTML = '<option value="">人数を選択してください</option>';
       
-      // 空き枠数に応じてドロップダウン要素を動的に作成（上限4名まで）
       const limit = Math.min(maxAvailable, 4);
       for (let i = 1; i <= limit; i++) {
         const opt = document.createElement('option');

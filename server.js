@@ -16,7 +16,7 @@ const ADMIN_PIN = "1234";
 
 // データ保持
 let slots = []; // { id, time, capacity, booked }
-let reservations = []; // { id, slotId, time, userId, displayName }
+let reservations = []; // { id, slotId, time, userId, displayName, count }
 let currentSlotIndex = 0;
 
 // ルーティング
@@ -63,34 +63,99 @@ app.delete('/api/admin/slots/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// API: 予約実行（デバッグログ付きLINE通知機能）
+// API: 予約実行（QRコード付きFlex Message通知機能）
 app.post('/api/reserve', async (req, res) => {
-  const { slotId, userId, displayName } = req.body;
+  const { slotId, userId, displayName, count } = req.body;
   const slot = slots.find(s => s.id === parseInt(slotId));
   if (!slot) return res.json({ success: false, error: '枠が存在しません' });
-  if (slot.booked >= slot.capacity) return res.json({ success: false, error: '満員です' });
 
-  slot.booked += 1;
+  const reserveCount = parseInt(count) || 1;
+  if ((slot.booked + reserveCount) > slot.capacity) {
+    return res.json({ success: false, error: '残り人数を超えています' });
+  }
+
+  slot.booked += reserveCount;
   const reservationId = Date.now();
   const newReservation = {
     id: reservationId,
     slotId: slot.id,
     time: slot.time,
     userId,
-    displayName: displayName || 'ゲスト'
+    displayName: displayName || 'ゲスト',
+    count: reserveCount
   };
   reservations.push(newReservation);
 
-  // LINE通知の送信とデバッグログ出力
+  // LINEユーザーIDとアクセストークンがある場合にQRコード付きカードを送信
   if (userId && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
     try {
       console.log(`[LINE送信開始] 宛先userId: ${userId}`);
+      
+      // 予約IDを元にQRコード画像URLを自動生成
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${reservationId}`;
+
       const lineRes = await axios.post('https://api.line.me/v2/bot/message/push', {
         to: userId,
         messages: [
           {
-            type: 'text',
-            text: `【『LINK』予約完了通知】\n\nご予約ありがとうございます！\n\n■ 予約時間: ${slot.time}\n■ 予約ID: ${reservationId}\n\n当日、こちらの予約IDをスタッフにお見せください。`
+            type: 'flex',
+            altText: '【『LINK』予約完了通知】ご予約ありがとうございます！',
+            contents: {
+              type: 'bubble',
+              body: {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '『LINK』体験予約完了',
+                    weight: 'bold',
+                    size: 'lg',
+                    color: '#06c755'
+                  },
+                  {
+                    type: 'separator',
+                    margin: 'md'
+                  },
+                  {
+                    type: 'text',
+                    text: `■ 予約時間: ${slot.time}`,
+                    size: 'sm',
+                    margin: 'md'
+                  },
+                  {
+                    type: 'text',
+                    text: `■ 予約人数: ${reserveCount}名`,
+                    size: 'sm',
+                    margin: 'sm'
+                  },
+                  {
+                    type: 'text',
+                    text: `■ 予約ID: ${reservationId}`,
+                    size: 'xs',
+                    color: '#aaaaaa',
+                    margin: 'sm'
+                  },
+                  {
+                    type: 'image',
+                    url: qrCodeUrl,
+                    size: 'medium',
+                    aspectRatio: '1:1',
+                    aspectMode: 'cover',
+                    margin: 'lg'
+                  },
+                  {
+                    type: 'text',
+                    text: '当日、こちらのQRコードをスタッフにお見せください。',
+                    size: 'xs',
+                    color: '#666666',
+                    wrap: true,
+                    margin: 'lg',
+                    align: 'center'
+                  }
+                ]
+              }
+            }
           }
         ]
       }, {
@@ -118,7 +183,7 @@ app.delete('/api/admin/reservations/:id', (req, res) => {
   if (targetIndex !== -1) {
     const target = reservations[targetIndex];
     const slot = slots.find(s => s.id === target.slotId);
-    if (slot && slot.booked > 0) slot.booked -= 1;
+    if (slot && slot.booked >= target.count) slot.booked -= target.count;
     reservations.splice(targetIndex, 1);
     io.emit('slots-updated', { slots, reservations, currentSlotIndex });
   }

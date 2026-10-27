@@ -12,12 +12,48 @@
     .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
     h1 { font-size: 18px; color: #333; text-align: center; margin-bottom: 15px; }
     
-    #reader { width: 100%; border-radius: 8px; overflow: hidden; }
+    /* カメラ枠の親要素をrelativeにしてオーバーレイを重ねられるようにする */
+    .scanner-wrapper { position: relative; width: 100%; border-radius: 8px; overflow: hidden; }
+    #reader { width: 100%; }
     
-    .result-box { margin-top: 15px; padding: 15px; border-radius: 8px; font-size: 16px; text-align: center; font-weight: bold; }
-    .success { background: #eef9f2; color: #155724; border: 1px solid #c3e6cb; }
-    .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    
+    /* カメラに被せる完了メッセージオーバーレイ */
+    .overlay-success {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(6, 199, 85, 0.9);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      z-index: 10;
+      display: none; /* 初期は非表示 */
+      animation: fadeIn 0.2s ease;
+    }
+    .overlay-error {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(220, 53, 69, 0.9);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      z-index: 10;
+      display: none;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .check-icon { font-size: 64px; font-weight: bold; margin-bottom: 10px; line-height: 1; }
+    .success-text { font-size: 22px; font-weight: bold; margin-bottom: 5px; }
+    .success-sub { font-size: 16px; opacity: 0.9; }
+
     .back-link { display: block; text-align: center; margin-top: 15px; color: #007bff; text-decoration: none; font-size: 14px; }
   </style>
 </head>
@@ -25,8 +61,25 @@
   <div class="container">
     <div class="card">
       <h1>来場者QRコード受付</h1>
-      <div id="reader"></div>
-      <div id="scanResult" class="result-box" style="display: none;"></div>
+      
+      <!-- カメラとオーバーレイをまとめるラッパー -->
+      <div class="scanner-wrapper">
+        <div id="reader"></div>
+        
+        <!-- 受付完了時にカメラの上に被せる表示 -->
+        <div id="overlaySuccess" class="overlay-success">
+          <div class="check-icon">✓</div>
+          <div class="success-text">受付完了</div>
+          <div class="success-sub" id="successDetail">-</div>
+        </div>
+
+        <!-- エラー時にカメラの上に被せる表示 -->
+        <div id="overlayError" class="overlay-error">
+          <div style="font-size: 40px; margin-bottom: 10px;">⚠️</div>
+          <div id="errorText" style="font-size: 18px; font-weight: bold;">エラー</div>
+        </div>
+      </div>
+
     </div>
     <a href="/admin" class="back-link">管理者ダッシュボードに戻る</a>
   </div>
@@ -39,7 +92,10 @@
       isProcessing = true;
 
       const reservationId = decodedText.trim();
-      const resultBox = document.getElementById('scanResult');
+      const overlaySuccess = document.getElementById('overlaySuccess');
+      const overlayError = document.getElementById('overlayError');
+      const successDetail = document.getElementById('successDetail');
+      const errorText = document.getElementById('errorText');
 
       try {
         const res = await fetch('/api/admin/check-in', {
@@ -49,24 +105,23 @@
         });
         const data = await res.json();
 
-        resultBox.style.display = 'block';
         if (data.success) {
-          resultBox.className = 'result-box success';
-          resultBox.innerHTML = `✓ 受付完了<br><span style="font-size: 14px; font-weight: normal;">${data.reservation.displayName} (${data.reservation.count}名)</span>`;
+          successDetail.innerText = `${data.reservation.displayName} (${data.reservation.count}名)`;
+          overlaySuccess.style.display = 'flex';
         } else {
-          resultBox.className = 'result-box error';
-          resultBox.innerText = "エラー: " + data.error;
+          errorText.innerText = data.error;
+          overlayError.style.display = 'flex';
         }
       } catch (err) {
-        resultBox.style.display = 'block';
-        resultBox.className = 'result-box error';
-        resultBox.innerText = "通信エラーが発生しました";
+        errorText.innerText = "通信エラーが発生しました";
+        overlayError.style.display = 'flex';
       }
 
-      // 3秒後に次の読み取りを再開
+      // 3秒後にオーバーレイを消して次のスキャンを再開
       setTimeout(() => {
+        overlaySuccess.style.display = 'none';
+        overlayError.style.display = 'none';
         isProcessing = false;
-        resultBox.style.display = 'none';
       }, 3000);
     }
 

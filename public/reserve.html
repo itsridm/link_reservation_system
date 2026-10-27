@@ -85,7 +85,7 @@
     async function initLIFF() {
       const userStatusDiv = document.getElementById('userStatus');
       try {
-        await liff.init({ liffId: "YOUR_LIFF_ID" });
+        await liff.init({ liffId: "2012246919-cYjIOJwZ" });
         if (liff.isLoggedIn()) {
           const profile = await liff.getProfile();
           currentUserId = profile.userId;

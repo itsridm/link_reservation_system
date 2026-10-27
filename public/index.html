@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>LINK 予約システム</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
+    .card { border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 8px; }
+    button { background: #06C755; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>『LINK』体験予約</h1>
+  <h2>予約可能枠</h2>
+  <div id="slots-container"></div>
+  <hr>
+  <h2>【管理者用】枠追加</h2>
+  <input type="text" id="slot-time" placeholder="例: 10:00 - 10:30">
+  <input type="number" id="slot-cap" placeholder="定員" value="5">
+  <button onclick="addSlot()">枠作成</button>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    socket.on('slots-updated', (slots) => {
+      const container = document.getElementById('slots-container');
+      container.innerHTML = '';
+      slots.forEach(slot => {
+        const isFull = slot.booked >= slot.capacity;
+        container.innerHTML += `
+          <div class="card">
+            <h3>${slot.time}</h3>
+            <p>残り: ${slot.capacity - slot.booked} / ${slot.capacity}</p>
+            <button onclick="reserve(${slot.id})" ${isFull ? 'disabled' : ''}>${isFull ? '満員' : '予約する'}</button>
+          </div>
+        `;
+      });
+    });
+    async function reserve(slotId) {
+      const res = await fetch('/api/reserve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slotId }) });
+      const data = await res.json();
+      if (data.success) alert('予約完了！');
+    }
+    async function addSlot() {
+      const time = document.getElementById('slot-time').value;
+      const capacity = document.getElementById('slot-cap').value;
+      await fetch('/api/admin/slots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ time, capacity }) });
+    }
+  </script>
+</body>
+</html>

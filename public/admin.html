@@ -19,7 +19,13 @@
     button:hover { background: #05b34c; }
     .btn-danger { background: #dc3545; padding: 6px 12px; font-size: 13px; }
     .btn-danger:hover { background: #c82333; }
-    .btn-manager { background: #007bff; display: inline-block; text-decoration: none; text-align: center; margin-bottom: 15px; }
+    
+    /* ナビゲーションボタンエリア */
+    .nav-buttons { display: flex; gap: 10px; margin-bottom: 20px; }
+    .btn-nav { flex: 1; padding: 12px; text-align: center; border-radius: 8px; font-weight: bold; text-decoration: none; color: white; display: inline-block; }
+    .btn-monitor { background: #17a2b8; }
+    .btn-monitor:hover { background: #138496; }
+    .btn-manager { background: #007bff; }
     .btn-manager:hover { background: #0056b3; }
 
     /* 予約枠一覧リスト */
@@ -35,8 +41,11 @@
   <div class="container">
     <h1>『LINK』体験予約 - 管理者ダッシュボード</h1>
 
-    <!-- 運営者画面へのボタン -->
-    <a href="/manager" class="btn-manager" target="_blank">運営者画面を開く</a>
+    <!-- 予約状況ページ / 運営者画面を開くボタン -->
+    <div class="nav-buttons">
+      <a href="/monitor" class="btn-nav btn-monitor" target="_blank">予約状況ページを開く</a>
+      <a href="/manager" class="btn-nav btn-manager" target="_blank">運営者画面を開く</a>
+    </div>
 
     <!-- 枠管理カード -->
     <div class="card">

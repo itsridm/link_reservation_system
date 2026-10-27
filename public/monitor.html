@@ -66,9 +66,19 @@
   <script>
     const socket = io();
 
-    socket.on('slots-updated', (slots) => {
+    // 最初にページを開いたときのデータを取得
+    fetch('/api/data')
+      .then(res => res.json())
+      .then(data => renderSlots(data.slots));
+
+    // リアルタイムの更新を受け取る
+    socket.on('slots-updated', (data) => {
+      renderSlots(data.slots);
+    });
+
+    function renderSlots(slots) {
       const container = document.getElementById('slots-container');
-      if (slots.length === 0) {
+      if (!slots || slots.length === 0) {
         container.innerHTML = '<p style="font-size: 1.5rem;">現在、ご案内可能な時間枠はありません。</p>';
         return;
       }
@@ -86,7 +96,7 @@
           </div>
         `;
       });
-    });
+    }
   </script>
 </body>
 </html>

@@ -16,7 +16,7 @@ const ADMIN_PIN = "1234";
 
 // データ保持
 let slots = []; // { id, time, capacity, booked }
-let reservations = []; // { id, slotId, time, userId, displayName, count }
+let reservations = []; // { id, slotId, time, userId, displayName, count, checked }
 let currentSlotIndex = 0;
 
 // ルーティング
@@ -25,6 +25,7 @@ app.get('/monitor', (req, res) => res.sendFile(__dirname + '/public/monitor.html
 app.get('/admin/login', (req, res) => res.sendFile(__dirname + '/public/admin-login.html'));
 app.get('/admin', (req, res) => res.sendFile(__dirname + '/public/admin.html'));
 app.get('/manager', (req, res) => res.sendFile(__dirname + '/public/manager.html'));
+app.get('/scanner', (req, res) => res.sendFile(__dirname + '/public/scanner.html'));
 
 // API: 枠・予約データ取得
 app.get('/api/data', (req, res) => {
@@ -64,6 +65,20 @@ app.delete('/api/admin/slots/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// API: 受付状態の更新（チェックイン）
+app.post('/api/admin/check-in', (req, res) => {
+  const { reservationId } = req.body;
+  const target = reservations.find(r => r.id === parseInt(reservationId));
+  
+  if (!target) {
+    return res.json({ success: false, error: '該当する予約IDが見つかりません' });
+  }
+
+  target.checked = true; // 受付済みに変更
+  io.emit('slots-updated', { slots, reservations, currentSlotIndex });
+  res.json({ success: true, reservation: target });
+});
+
 // API: 予約実行（テキスト＋QRコード画像送信機能）
 app.post('/api/reserve', async (req, res) => {
   const { slotId, userId, displayName, count } = req.body;
@@ -83,18 +98,17 @@ app.post('/api/reserve', async (req, res) => {
     time: slot.time,
     userId,
     displayName: displayName || 'ゲスト',
-    count: reserveCount
+    count: reserveCount,
+    checked: false
   };
   reservations.push(newReservation);
 
   // LINEユーザーIDとアクセストークンがある場合にテキスト＋QRコード画像を送る
   if (userId && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
     try {
-      console.log(`[LINE送信開始] 宛先userId: ${userId}`);
-      
       const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${reservationId}`;
 
-      const lineRes = await axios.post('https://api.line.me/v2/bot/message/push', {
+      await axios.post('https://api.line.me/v2/bot/message/push', {
         to: userId,
         messages: [
           {
@@ -113,12 +127,9 @@ app.post('/api/reserve', async (req, res) => {
           'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
         }
       });
-      console.log('[LINE送信成功]', lineRes.data);
     } catch (err) {
       console.error('★LINE送信エラー詳細:', err.response?.data || err.message);
     }
-  } else {
-    console.log('[LINE送信スキップ] userIdがないか、トークンが未設定です。 userId:', userId);
   }
 
   io.emit('slots-updated', { slots, reservations, currentSlotIndex });
@@ -137,15 +148,6 @@ app.delete('/api/admin/reservations/:id', (req, res) => {
     io.emit('slots-updated', { slots, reservations, currentSlotIndex });
   }
   res.json({ success: true });
-});
-
-// API: 進行管理（次の枠に進む）
-app.post('/api/admin/next-slot', (req, res) => {
-  if (currentSlotIndex < slots.length - 1) {
-    currentSlotIndex += 1;
-    io.emit('slots-updated', { slots, reservations, currentSlotIndex });
-  }
-  res.json({ success: true, currentSlotIndex });
 });
 
 const PORT = process.env.PORT || 10000;

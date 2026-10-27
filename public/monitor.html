@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>『LINK』体験予約 - リアルタイム空き状況</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #111;
+      color: #fff;
+      text-align: center;
+      padding: 40px 20px;
+      margin: 0;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 30px;
+      color: #06C755;
+    }
+    .grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      max-width: 1000px;
+      margin: auto;
+    }
+    .card {
+      background: #222;
+      border: 2px solid #444;
+      border-radius: 12px;
+      padding: 25px;
+      width: 280px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+    .card.full {
+      border-color: #ff4d4d;
+      background: #2a1515;
+    }
+    .time {
+      font-size: 1.8rem;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+    .status {
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+    .available { color: #06C755; }
+    .full-text { color: #ff4d4d; }
+    .count {
+      font-size: 1rem;
+      color: #aaa;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>『LINK』体験ご案内状況</h1>
+  <div id="slots-container" class="grid">
+    <p>読み込み中...</p>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    socket.on('slots-updated', (slots) => {
+      const container = document.getElementById('slots-container');
+      if (slots.length === 0) {
+        container.innerHTML = '<p style="font-size: 1.5rem;">現在、ご案内可能な時間枠はありません。</p>';
+        return;
+      }
+      container.innerHTML = '';
+      slots.forEach(slot => {
+        const remaining = slot.capacity - slot.booked;
+        const isFull = remaining <= 0;
+        container.innerHTML += `
+          <div class="card ${isFull ? 'full' : ''}">
+            <div class="time">${slot.time}</div>
+            <div class="status ${isFull ? 'full-text' : 'available'}">
+              ${isFull ? '満員' : '空きあり'}
+            </div>
+            <div class="count">残り ${remaining} 枠 / 定員 ${slot.capacity}</div>
+          </div>
+        `;
+      });
+    });
+  </script>
+</body>
+</html>

@@ -11,72 +11,132 @@
     .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
     h1 { font-size: 20px; color: #333; text-align: center; margin-bottom: 20px; }
     
-    /* 枠リスト */
-    .slot-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; background: #fff; }
-    .slot-time { font-size: 16px; font-weight: bold; color: #333; }
-    .slot-capacity { font-size: 14px; color: #555; }
-    
-    .symbol-info { font-size: 15px; font-weight: bold; }
-    .symbol-circle { color: #06c755; }
-    .symbol-triangle { color: #ff9800; }
-    .symbol-cross { color: #f44336; }
+    /* 案内中バナー＆ボタン */
+    .current-banner { background: #06c755; color: white; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(6,199,85,0.3); }
+    .current-time { font-size: 26px; font-weight: bold; margin: 10px 0; }
+    .btn-next { background: #fff; color: #06c755; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; width: 100%; transition: background 0.2s; }
+    .btn-next:hover { background: #f0f0f0; }
+    .btn-next:disabled { background: #e0e0e0; color: #888; cursor: not-allowed; }
+
+    /* 予約一覧テーブル */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
+    th { background: #f8f9fa; color: #333; font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>『LINK』体験 運営者画面</h1>
     
+    <!-- 現在案内中の枠 ＆ 次の枠へ進むボタン -->
+    <div id="currentBanner" class="current-banner" style="display: none;">
+      <div>現在案内中の枠</div>
+      <div id="currentTargetTime" class="current-time">-</div>
+      <button id="nextSlotBtn" class="btn-next">次の枠へ進む</button>
+    </div>
+
+    <!-- 案内中枠の予約者一覧 -->
     <div class="card">
-      <div style="font-weight: bold; margin-bottom: 12px; color: #555;">予約状況一覧</div>
-      <div id="managerSlotList">読み込み中...</div>
+      <div style="font-weight: bold; margin-bottom: 12px; color: #555;" id="targetSlotTitle">案内中枠の予約者一覧</div>
+      <table>
+        <thead>
+          <tr>
+            <th>LINE表示名</th>
+            <th>予約ID</th>
+            <th>人数</th>
+            <th>受付状況</th>
+          </tr>
+        </thead>
+        <tbody id="managerReservationTable">
+          <tr><td colspan="4" style="text-align: center; color: #777;">現在案内中の枠はありません</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
   <script>
     const socket = io();
+    let globalSlots = [];
+    let globalReservations = [];
+    let currentSlotIndex = 0;
 
     socket.on('slots-updated', (data) => {
-      updateManager(data.slots);
+      globalSlots = data.slots;
+      globalReservations = data.reservations;
+      currentSlotIndex = data.currentSlotIndex;
+      updateManager();
     });
 
     fetch('/api/data')
       .then(res => res.json())
       .then(data => {
-        updateManager(data.slots);
+        globalSlots = data.slots;
+        globalReservations = data.reservations;
+        currentSlotIndex = data.currentSlotIndex;
+        updateManager();
       });
 
-    function updateManager(slots) {
-      const slotList = document.getElementById('managerSlotList');
-      slotList.innerHTML = '';
+    function updateManager() {
+      const currentBanner = document.getElementById('currentBanner');
+      const currentTargetTime = document.getElementById('currentTargetTime');
+      const tbody = document.getElementById('managerReservationTable');
+      const nextSlotBtn = document.getElementById('nextSlotBtn');
 
-      if (slots.length === 0) {
-        slotList.innerHTML = '<div style="color: #777; text-align: center; padding: 20px 0;">現在登録されている枠はありません</div>';
+      if (globalSlots.length === 0 || currentSlotIndex >= globalSlots.length) {
+        currentBanner.style.display = 'none';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #777;">現在有効な枠はありません</td></tr>';
         return;
       }
 
-      slots.forEach(slot => {
-        const remaining = slot.capacity - slot.booked;
-        const div = document.createElement('div');
-        div.className = 'slot-item';
+      currentBanner.style.display = 'block';
+      const currentSlot = globalSlots[currentSlotIndex];
+      currentTargetTime.innerText = currentSlot.time;
 
-        let symbolHtml = '';
-        if (remaining >= 2) {
-          symbolHtml = `<span class="symbol-info symbol-circle">〇</span>`;
-        } else if (remaining === 1) {
-          symbolHtml = `<span class="symbol-info symbol-triangle">△</span>`;
-        } else {
-          symbolHtml = `<span class="symbol-info symbol-cross" style="font-size: 13px;">キャンセル待ち</span>`;
-        }
+      // 「次の枠へ」ボタンの有効・無効切り替え
+      if (currentSlotIndex >= globalSlots.length - 1) {
+        nextSlotBtn.innerText = "最後の枠です";
+        nextSlotBtn.disabled = true;
+      } else {
+        nextSlotBtn.innerText = "次の枠へ進む";
+        nextSlotBtn.disabled = false;
+      }
 
-        div.innerHTML = `
-          <span class="slot-time">${slot.time}</span>
-          <span class="slot-capacity">残り枠数: ${remaining}/${slot.capacity}</span>
-          ${symbolHtml}
-        `;
+      // 現在の枠に紐づく予約を抽出
+      const targetReservations = globalReservations.filter(r => r.slotId === currentSlot.id);
+      
+      tbody.innerHTML = '';
+      if (targetReservations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #777;">この枠の予約はありません</td></tr>';
+      } else {
+        targetReservations.forEach(resv => {
+          const statusHtml = resv.checked 
+            ? '<span style="color: #06c755; font-weight: bold;">受付済</span>' 
+            : '<span style="color: #666;">未受付</span>';
 
-        slotList.appendChild(div);
-      });
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${resv.displayName || 'ゲスト'}</td>
+            <td>${resv.id}</td>
+            <td>${resv.count || 1}名</td>
+            <td>${statusHtml}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
     }
+
+    // 次の枠へ進むボタン
+    document.getElementById('nextSlotBtn').onclick = async () => {
+      try {
+        const res = await fetch('/api/admin/next-slot', { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) {
+          alert("次の枠に進めませんでした");
+        }
+      } catch (err) {
+        alert("通信エラーが発生しました");
+      }
+    };
   </script>
 </body>
 </html>

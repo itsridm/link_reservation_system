@@ -7,58 +7,62 @@
   <style>
     body {
       font-family: sans-serif;
-      background: #111;
-      color: #fff;
+      background: #ffffff; /* 背景を白に設定 */
+      color: #333333;
       text-align: center;
-      padding: 40px 20px;
+      padding: 30px 20px;
       margin: 0;
     }
     h1 {
-      font-size: 2.5rem;
+      font-size: 2.2rem;
       margin-bottom: 30px;
       color: #06C755;
     }
-    .grid {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 20px;
-      max-width: 1000px;
+    .container {
+      max-width: 600px;
       margin: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
-    .card {
-      background: #222;
-      border: 2px solid #444;
-      border-radius: 12px;
-      padding: 25px;
-      width: 280px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    /* 行（スロット）のデザイン */
+    .slot-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f9f9f9;
+      border: 2px solid #eee;
+      border-radius: 10px;
+      padding: 18px 25px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+      transition: all 0.2s;
     }
-    .card.full {
-      border-color: #ff4d4d;
-      background: #2a1515;
+    /* 満員のときのスタイル（薄くする） */
+    .slot-row.full {
+      opacity: 0.4;
+      background: #f1f1f1;
+      border-color: #ddd;
     }
-    .time {
-      font-size: 1.8rem;
-      font-weight: bold;
-      margin-bottom: 15px;
-    }
-    .status {
+    .slot-time {
       font-size: 1.5rem;
       font-weight: bold;
     }
-    .available { color: #06C755; }
-    .full-text { color: #ff4d4d; }
-    .count {
-      font-size: 1rem;
-      color: #aaa;
-      margin-top: 10px;
+    .slot-count {
+      font-size: 1.1rem;
+      color: #666;
     }
+    .status-badge {
+      font-size: 1.8rem;
+      font-weight: bold;
+    }
+    .status-circle { color: #28a745; } /* 〇: 緑 */
+    .status-triangle { color: #ffc107; } /* △: 黄色 */
+    .status-cross { color: #dc3545; } /* ✕: 赤 */
   </style>
 </head>
 <body>
   <h1>『LINK』体験ご案内状況</h1>
-  <div id="slots-container" class="grid">
+  <div id="slots-container" class="container">
     <p>読み込み中...</p>
   </div>
 
@@ -66,12 +70,12 @@
   <script>
     const socket = io();
 
-    // 最初にページを開いたときのデータを取得
+    // 初回データ取得
     fetch('/api/data')
       .then(res => res.json())
       .then(data => renderSlots(data.slots));
 
-    // リアルタイムの更新を受け取る
+    // リアルタイム更新
     socket.on('slots-updated', (data) => {
       renderSlots(data.slots);
     });
@@ -79,20 +83,32 @@
     function renderSlots(slots) {
       const container = document.getElementById('slots-container');
       if (!slots || slots.length === 0) {
-        container.innerHTML = '<p style="font-size: 1.5rem;">現在、ご案内可能な時間枠はありません。</p>';
+        container.innerHTML = '<p style="font-size: 1.2rem; color: #666;">現在、ご案内可能な時間枠はありません。</p>';
         return;
       }
       container.innerHTML = '';
       slots.forEach(slot => {
         const remaining = slot.capacity - slot.booked;
         const isFull = remaining <= 0;
+
+        // 記号と色の判定
+        let symbol, colorClass;
+        if (isFull) {
+          symbol = '✕';
+          colorClass = 'status-cross';
+        } else if (remaining <= 3) {
+          symbol = '△';
+          colorClass = 'status-triangle'; // 黄色
+        } else {
+          symbol = '〇';
+          colorClass = 'status-circle';   // 緑
+        }
+
         container.innerHTML += `
-          <div class="card ${isFull ? 'full' : ''}">
-            <div class="time">${slot.time}</div>
-            <div class="status ${isFull ? 'full-text' : 'available'}">
-              ${isFull ? '満員' : '空きあり'}
-            </div>
-            <div class="count">残り ${remaining} 枠 / 定員 ${slot.capacity}</div>
+          <div class="slot-row ${isFull ? 'full' : ''}">
+            <div class="slot-time">${slot.time}</div>
+            <div class="slot-count">残り枠数: ${remaining}/${slot.capacity}</div>
+            <div class="status-badge ${colorClass}">${symbol}</div>
           </div>
         `;
       });

@@ -63,7 +63,7 @@ app.delete('/api/admin/slots/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// API: 予約実行（LINE通知機能付き）
+// API: 予約実行（デバッグログ付きLINE通知機能）
 app.post('/api/reserve', async (req, res) => {
   const { slotId, userId, displayName } = req.body;
   const slot = slots.find(s => s.id === parseInt(slotId));
@@ -81,10 +81,11 @@ app.post('/api/reserve', async (req, res) => {
   };
   reservations.push(newReservation);
 
-  // LINEユーザーIDが存在し、アクセストークンが設定されている場合にLINEへ通知を送信
+  // LINE通知の送信とデバッグログ出力
   if (userId && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
     try {
-      await axios.post('https://api.line.me/v2/bot/message/push', {
+      console.log(`[LINE送信開始] 宛先userId: ${userId}`);
+      const lineRes = await axios.post('https://api.line.me/v2/bot/message/push', {
         to: userId,
         messages: [
           {
@@ -98,9 +99,12 @@ app.post('/api/reserve', async (req, res) => {
           'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
         }
       });
+      console.log('[LINE送信成功]', lineRes.data);
     } catch (err) {
-      console.error('LINE送信エラー:', err.response?.data || err.message);
+      console.error('★LINE送信エラー詳細:', err.response?.data || err.message);
     }
+  } else {
+    console.log('[LINE送信スキップ] userIdがないか、トークンが未設定です。 userId:', userId);
   }
 
   io.emit('slots-updated', { slots, reservations, currentSlotIndex });

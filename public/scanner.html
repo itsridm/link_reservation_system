@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>『LINK』受付スキャナー</title>
   <script src="/socket.io/socket.io.js"></script>
-  <!-- QRコード読み取り用ライブラリ -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body { font-family: sans-serif; background: #f4f6f8; margin: 0; padding: 15px; }
@@ -15,7 +14,7 @@
     
     #reader { width: 100%; border-radius: 8px; overflow: hidden; }
     
-    .result-box { margin-top: 15px; padding: 15px; border-radius: 8px; font-size: 15px; text-align: center; font-weight: bold; }
+    .result-box { margin-top: 15px; padding: 15px; border-radius: 8px; font-size: 16px; text-align: center; font-weight: bold; }
     .success { background: #eef9f2; color: #155724; border: 1px solid #c3e6cb; }
     .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     
@@ -35,9 +34,8 @@
   <script>
     let isProcessing = false;
 
-    // QRコード読み取り成功時の処理
     async function onScanSuccess(decodedText, decodedResult) {
-      if (isProcessing) return; // 連続読み込み防止
+      if (isProcessing) return;
       isProcessing = true;
 
       const reservationId = decodedText.trim();
@@ -54,12 +52,7 @@
         resultBox.style.display = 'block';
         if (data.success) {
           resultBox.className = 'result-box success';
-          resultBox.innerHTML = `
-            受付成功！<br>
-            予約ID: ${data.reservation.id}<br>
-            氏名: ${data.reservation.displayName}<br>
-            時間: ${data.reservation.time} (${data.reservation.count}名)
-          `;
+          resultBox.innerHTML = `✓ 受付完了<br><span style="font-size: 14px; font-weight: normal;">${data.reservation.displayName} (${data.reservation.count}名)</span>`;
         } else {
           resultBox.className = 'result-box error';
           resultBox.innerText = "エラー: " + data.error;
@@ -73,13 +66,13 @@
       // 3秒後に次の読み取りを再開
       setTimeout(() => {
         isProcessing = false;
+        resultBox.style.display = 'none';
       }, 3000);
     }
 
-    // カメラの起動設定
     const html5QrCode = new Html5Qrcode("reader");
     html5QrCode.start(
-      { facingMode: "environment" }, // 外側のカメラ（背面カメラ）を使用
+      { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 } },
       onScanSuccess
     ).catch(err => {

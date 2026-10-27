@@ -63,7 +63,7 @@ app.delete('/api/admin/slots/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// API: 予約実行（QRコード付きFlex Message通知機能）
+// API: 予約実行（テキスト＋QRコード画像送信機能）
 app.post('/api/reserve', async (req, res) => {
   const { slotId, userId, displayName, count } = req.body;
   const slot = slots.find(s => s.id === parseInt(slotId));
@@ -86,76 +86,24 @@ app.post('/api/reserve', async (req, res) => {
   };
   reservations.push(newReservation);
 
-  // LINEユーザーIDとアクセストークンがある場合にQRコード付きカードを送信
+  // LINEユーザーIDとアクセストークンがある場合にテキスト＋QRコード画像を送る
   if (userId && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
     try {
       console.log(`[LINE送信開始] 宛先userId: ${userId}`);
       
-      // 予約IDを元にQRコード画像URLを自動生成
       const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${reservationId}`;
 
       const lineRes = await axios.post('https://api.line.me/v2/bot/message/push', {
         to: userId,
         messages: [
           {
-            type: 'flex',
-            altText: '【『LINK』予約完了通知】ご予約ありがとうございます！',
-            contents: {
-              type: 'bubble',
-              body: {
-                type: 'box',
-                layout: 'vertical',
-                contents: [
-                  {
-                    type: 'text',
-                    text: '『LINK』体験予約完了',
-                    weight: 'bold',
-                    size: 'lg',
-                    color: '#06c755'
-                  },
-                  {
-                    type: 'separator',
-                    margin: 'md'
-                  },
-                  {
-                    type: 'text',
-                    text: `■ 予約時間: ${slot.time}`,
-                    size: 'sm',
-                    margin: 'md'
-                  },
-                  {
-                    type: 'text',
-                    text: `■ 予約人数: ${reserveCount}名`,
-                    size: 'sm',
-                    margin: 'sm'
-                  },
-                  {
-                    type: 'text',
-                    text: `■ 予約ID: ${reservationId}`,
-                    size: 'xs',
-                    color: '#aaaaaa',
-                    margin: 'sm'
-                  },
-                  {
-                    type: 'image',
-                    url: qrCodeUrl,
-                    size: 'medium',
-                    aspectRatio: '1:1',
-                    aspectMode: 'cover',
-                    margin: 'lg'
-                  },
-                  {
-                    type: 'text',
-                    text: '当日、こちらのQRコードをスタッフにお見せください。',
-                    size: 'xs',
-                    color: '#666666',
-                    wrap: true,
-                    margin: 'lg',
-                    align: 'center'
-                  }
-                ]
-              }
-            }
+            type: 'text',
+            text: `【『LINK』予約完了通知】\n\nご予約ありがとうございます！\n\n■ 予約時間: ${slot.time}\n■ 予約人数: ${reserveCount}名\n■ 予約ID: ${reservationId}\n\n当日、下のQRコードまたは予約IDをスタッフにお見せください。`
+          },
+          {
+            type: 'image',
+            originalContentUrl: qrCodeUrl,
+            previewImageUrl: qrCodeUrl
           }
         ]
       }, {

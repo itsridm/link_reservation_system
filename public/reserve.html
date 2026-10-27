@@ -156,10 +156,9 @@
       });
     }
 
-    function openModal(slotId, slotTime) {
+   function openModal(slotId, slotTime) {
       selectedSlotId = slotId;
-      document.getElementById('modal-text.innerText = `${slotTime}\nこちらの時間帯で予約しますか？`;` // Correct format below
-      document.getElementById('modal-text').innerText = `${slotTime}\nこちらの時間帯で予約しますか？`;
+      document.getElementById('modal-text').innerText = `${slotTime}\n予約しますか？`;
       document.getElementById('modal').style.display = 'flex';
     }
 

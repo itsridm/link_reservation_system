@@ -1,7 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const line = require('@line/bot-sdk');
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
@@ -11,11 +11,11 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static('public'));
 
-// ADMIN PIN設定（必要に応じて変更してください）
+// ADMIN PIN設定
 const ADMIN_PIN = "1234";
 
-// データ保持（本番ではDB推奨）
-let slots = []; // { id, time, capacity, booked, current: false }
+// データ保持
+let slots = []; // { id, time, capacity, booked }
 let reservations = []; // { id, slotId, time, userId, displayName }
 let currentSlotIndex = 0;
 
@@ -25,7 +25,7 @@ app.get('/monitor', (req, res) => res.sendFile(__dirname + '/public/monitor.html
 app.get('/admin/login', (req, res) => res.sendFile(__dirname + '/public/admin-login.html'));
 app.get('/admin', (req, res) => res.sendFile(__dirname + '/public/admin.html'));
 
-// API: 枠・予約取得
+// API: 枠・予約データ取得
 app.get('/api/data', (req, res) => {
   res.json({ slots, reservations, currentSlotIndex });
 });
@@ -63,22 +63,45 @@ app.delete('/api/admin/slots/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// API: 予約実行
-app.post('/api/reserve', (req, res) => {
+// API: 予約実行（LINE通知機能付き）
+app.post('/api/reserve', async (req, res) => {
   const { slotId, userId, displayName } = req.body;
   const slot = slots.find(s => s.id === parseInt(slotId));
   if (!slot) return res.json({ success: false, error: '枠が存在しません' });
   if (slot.booked >= slot.capacity) return res.json({ success: false, error: '満員です' });
 
   slot.booked += 1;
+  const reservationId = Date.now();
   const newReservation = {
-    id: Date.now(),
+    id: reservationId,
     slotId: slot.id,
     time: slot.time,
     userId,
     displayName: displayName || 'ゲスト'
   };
   reservations.push(newReservation);
+
+  // LINEユーザーIDが存在し、アクセストークンが設定されている場合にLINEへ通知を送信
+  if (userId && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+    try {
+      await axios.post('https://api.line.me/v2/bot/message/push', {
+        to: userId,
+        messages: [
+          {
+            type: 'text',
+            text: `【『LINK』予約完了通知】\n\nご予約ありがとうございます！\n\n■ 予約時間: ${slot.time}\n■ 予約ID: ${reservationId}\n\n当日、こちらの予約IDをスタッフにお見せください。`
+          }
+        ]
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+        }
+      });
+    } catch (err) {
+      console.error('LINE送信エラー:', err.response?.data || err.message);
+    }
+  }
 
   io.emit('slots-updated', { slots, reservations, currentSlotIndex });
   res.json({ success: true, reservation: newReservation });

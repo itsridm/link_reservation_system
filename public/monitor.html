@@ -91,23 +91,25 @@
         const remaining = slot.capacity - slot.booked;
         const isFull = remaining <= 0;
 
-        // 記号と色の判定
-        let symbol, colorClass;
+        let symbol, colorClass, countText;
         if (isFull) {
           symbol = '✕';
           colorClass = 'status-cross';
+          countText = 'キャンセル待ち';
         } else if (remaining <= 3) {
           symbol = '△';
-          colorClass = 'status-triangle'; // 黄色
+          colorClass = 'status-triangle';
+          countText = `残り枠数: ${remaining}/${slot.capacity}`;
         } else {
           symbol = '〇';
-          colorClass = 'status-circle';   // 緑
+          colorClass = 'status-circle';
+          countText = `残り枠数: ${remaining}/${slot.capacity}`;
         }
 
         container.innerHTML += `
           <div class="slot-row ${isFull ? 'full' : ''}">
             <div class="slot-time">${slot.time}</div>
-            <div class="slot-count">残り枠数: ${remaining}/${slot.capacity}</div>
+            <div class="slot-count">${countText}</div>
             <div class="status-badge ${colorClass}">${symbol}</div>
           </div>
         `;

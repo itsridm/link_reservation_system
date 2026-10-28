@@ -11,15 +11,12 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static('public'));
 
-// ADMIN PIN設定
 const ADMIN_PIN = "1234";
 
-// データ保持
-let slots = []; // { id, time, capacity, booked }
-let reservations = []; // { id, slotId, time, userId, displayName, count, checked }
+let slots = [];
+let reservations = [];
 let currentSlotIndex = 0;
 
-// ルーティング
 app.get('/reserve', (req, res) => res.sendFile(__dirname + '/public/reserve.html'));
 app.get('/monitor', (req, res) => res.sendFile(__dirname + '/public/monitor.html'));
 app.get('/admin/login', (req, res) => res.sendFile(__dirname + '/public/admin-login.html'));
@@ -27,51 +24,45 @@ app.get('/admin', (req, res) => res.sendFile(__dirname + '/public/admin.html'));
 app.get('/manager', (req, res) => res.sendFile(__dirname + '/public/manager.html'));
 app.get('/scanner', (req, res) => res.sendFile(__dirname + '/public/scanner.html'));
 
-// API: 枠・予約データ取得
 app.get('/api/data', (req, res) => {
   res.json({ slots, reservations, currentSlotIndex });
 });
 
-// API: 管理者ログイン認証
 app.post('/api/admin/login', (req, res) => {
   const { pin } = req.body;
-  if (pin === ADMIN_PIN) {
-    res.json({ success: true });
-  } else {
-    res.json({ success: false, error: 'PINが正しくありません' });
-  }
+  if (pin === ADMIN_PIN) res.json({ success: true });
+  else res.json({ success: false, error: 'PINが正しくありません' });
 });
 
-// API: 枠作成
 app.post('/api/admin/slots', (req, res) => {
   const { time, capacity } = req.body;
-  const newSlot = {
-    id: Date.now(),
-    time,
-    capacity: parseInt(capacity),
-    booked: 0
-  };
-  slots.push(newSlot);
+  slots.push({ id: Date.now(), time, capacity: parseInt(capacity), booked: 0 });
   io.emit('slots-updated', { slots, reservations, currentSlotIndex });
   res.json({ success: true });
 });
 
-// API: 枠削除
 app.delete('/api/admin/slots/:id', (req, res) => {
   const id = parseInt(req.params.id);
   slots = slots.filter(s => s.id !== id);
   reservations = reservations.filter(r => r.slotId !== id);
-  if (currentSlotIndex >= slots.length && slots.length > 0) {
-    currentSlotIndex = slots.length - 1;
-  }
+  if (currentSlotIndex >= slots.length && slots.length > 0) currentSlotIndex = slots.length - 1;
   io.emit('slots-updated', { slots, reservations, currentSlotIndex });
   res.json({ success: true });
 });
 
-// API: 次の枠へ進む
+// API: 次の枠へ進行（前の枠を自動削除し、予約画面等から消去する）
 app.post('/api/admin/next-slot', (req, res) => {
+  if (slots.length === 0) return res.json({ success: false, error: '枠が登録されていません' });
+
   if (currentSlotIndex < slots.length - 1) {
-    currentSlotIndex++;
+    // 終わった枠（インデックス0からcurrentSlotIndexまで）を配列から削除し、対応する予約もクリアする
+    const removedSlots = slots.splice(0, 1); // 先頭の枠を削除
+    const removedSlotIds = removedSlots.map(s => s.id);
+    reservations = reservations.filter(r => !removedSlotIds.includes(r.slotId));
+    
+    // currentSlotIndexは先頭が消えるため0のままか維持される
+    if (currentSlotIndex > 0) currentSlotIndex--;
+
     io.emit('slots-updated', { slots, reservations, currentSlotIndex });
     res.json({ success: true, currentSlotIndex });
   } else {
@@ -79,21 +70,53 @@ app.post('/api/admin/next-slot', (req, res) => {
   }
 });
 
-// API: 受付状態の更新（チェックイン）
+// API: LINE呼び出し（リマインド送信）
+app.post('/api/admin/call-slot', async (req, res) => {
+  const { slotId } = req.body;
+  const slot = slots.find(s => s.id === parseInt(slotId));
+  if (!slot) return res.json({ success: false, error: '指定された枠が見つかりません' });
+
+  const targetReservations = reservations.filter(r => r.slotId === slot.id && r.userId);
+  if (targetReservations.length === 0) {
+    return res.json({ success: false, error: 'この枠にLINE連携済みの予約者がいません' });
+  }
+
+  let sentCount = 0;
+  for (const r of targetReservations) {
+    if (process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+      try {
+        await axios.post('https://api.line.me/v2/bot/message/push', {
+          to: r.userId,
+          messages: [{
+            type: 'text',
+            text: `【『LINK』呼び出し通知】\n\nまもなく ${slot.time} の体験枠のご案内時間となります！\n受付ブースまでお越しください。\n\n■ 予約ID: ${r.id}`
+          }]
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+          }
+        });
+        sentCount++;
+      } catch (err) {
+        console.error('LINE呼び出し送信エラー:', err.response?.data || err.message);
+      }
+    }
+  }
+
+  res.json({ success: true, sentCount });
+});
+
 app.post('/api/admin/check-in', (req, res) => {
   const { reservationId } = req.body;
   const target = reservations.find(r => r.id === parseInt(reservationId));
-  
-  if (!target) {
-    return res.json({ success: false, error: '該当する予約IDが見つかりません' });
-  }
+  if (!target) return res.json({ success: false, error: '該当する予約IDが見つかりません' });
 
-  target.checked = true; // 受付済みに変更
+  target.checked = true;
   io.emit('slots-updated', { slots, reservations, currentSlotIndex });
   res.json({ success: true, reservation: target });
 });
 
-// API: 予約実行（テキスト＋QRコード画像送信機能）
 app.post('/api/reserve', async (req, res) => {
   const { slotId, userId, displayName, count } = req.body;
   const slot = slots.find(s => s.id === parseInt(slotId));
@@ -117,11 +140,9 @@ app.post('/api/reserve', async (req, res) => {
   };
   reservations.push(newReservation);
 
-  // LINEユーザーIDとアクセストークンがある場合にテキスト＋QRコード画像を送る
   if (userId && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
     try {
       const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${reservationId}`;
-
       await axios.post('https://api.line.me/v2/bot/message/push', {
         to: userId,
         messages: [
@@ -142,7 +163,7 @@ app.post('/api/reserve', async (req, res) => {
         }
       });
     } catch (err) {
-      console.error('★LINE送信エラー詳細:', err.response?.data || err.message);
+      console.error('★LINE送信エラー:', err.response?.data || err.message);
     }
   }
 
@@ -150,7 +171,6 @@ app.post('/api/reserve', async (req, res) => {
   res.json({ success: true, reservation: newReservation });
 });
 
-// API: 予約削除（管理者用）
 app.delete('/api/admin/reservations/:id', (req, res) => {
   const resId = parseInt(req.params.id);
   const targetIndex = reservations.findIndex(r => r.id === resId);

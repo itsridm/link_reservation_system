@@ -85,20 +85,27 @@
     async function initLIFF() {
       const userStatusDiv = document.getElementById('userStatus');
       try {
-        await liff.init({ liffId: "2012246919-cYjIOJwZ" });
-        if (liff.isLoggedIn()) {
-          const profile = await liff.getProfile();
-          currentUserId = profile.userId;
-          currentDisplayName = profile.displayName;
-          userStatusDiv.innerText = `ログイン中: ${currentDisplayName}さん`;
+        await liff.init({ liffId: "2012246919-cYjIOJwZ" }); // お手元のLIFF ID
+        
+        // LINEアプリ内から開かれているかチェック
+        if (liff.isInClient()) {
+          if (!liff.isLoggedIn()) {
+            liff.login(); // ログインしていなければLINEログイン画面へ
+          } else {
+            const profile = await liff.getProfile();
+            currentUserId = profile.userId;
+            currentDisplayName = profile.displayName;
+            userStatusDiv.innerText = `ログイン中: ${currentDisplayName}さん`;
+          }
         } else {
+          // 外部ブラウザ（PCのChromeやSafariなど）で開いている場合
           userStatusDiv.innerText = "※ブラウザから閲覧中（LINE通知は届きません）";
         }
       } catch (err) {
-        userStatusDiv.innerText = "※LINE連携未完了（ブラウザ閲覧）";
+        console.error("LIFF初期化エラー:", err);
+        userStatusDiv.innerText = "※LINE連携エラー（ブラウザ閲覧扱い）";
       }
     }
-    initLIFF();
 
     socket.on('slots-updated', (data) => {
       globalSlots = data.slots;

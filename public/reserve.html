@@ -13,7 +13,6 @@
     .step-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #333; border-bottom: 2px solid #06c755; padding-bottom: 5px; }
     .user-status { font-size: 13px; color: #06c755; font-weight: bold; margin-bottom: 15px; }
     
-    /* 枠アイテム */
     .slot-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; cursor: pointer; background: #fff; transition: background 0.2s; }
     .slot-item:hover { background: #f9f9f9; }
     .slot-item.disabled { opacity: 0.5; background: #f0f0f0; cursor: not-allowed; }
@@ -25,7 +24,6 @@
     .symbol-triangle { color: #ff9800; }
     .symbol-cross { color: #f44336; font-size: 18px; }
 
-    /* 入力・ボタン類 */
     select, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
     button { background: #06c755; color: white; border: none; font-weight: bold; cursor: pointer; }
     button:disabled { background: #ccc; cursor: not-allowed; }
@@ -77,20 +75,20 @@
   <script>
     const socket = io();
     let currentUserId = "";
-    let currentDisplayName = "";
+    let currentDisplayName = "ゲスト";
     let globalSlots = [];
     let selectedSlot = null;
     let selectedCount = 1;
 
+    // LIFF初期化
     async function initLIFF() {
       const userStatusDiv = document.getElementById('userStatus');
       try {
         await liff.init({ liffId: "2012246919-cYjIOJwZ" }); // お手元のLIFF ID
         
-        // LINEアプリ内から開かれているかチェック
         if (liff.isInClient()) {
           if (!liff.isLoggedIn()) {
-            liff.login(); // ログインしていなければLINEログイン画面へ
+            liff.login();
           } else {
             const profile = await liff.getProfile();
             currentUserId = profile.userId;
@@ -98,14 +96,16 @@
             userStatusDiv.innerText = `ログイン中: ${currentDisplayName}さん`;
           }
         } else {
-          // 外部ブラウザ（PCのChromeやSafariなど）で開いている場合
           userStatusDiv.innerText = "※ブラウザから閲覧中（LINE通知は届きません）";
         }
       } catch (err) {
-        console.error("LIFF初期化エラー:", err);
-        userStatusDiv.innerText = "※LINE連携エラー（ブラウザ閲覧扱い）";
+        console.error("LIFF初期化失敗:", err);
+        userStatusDiv.innerText = "※LINE連携スキップ（ブラウザモード）";
       }
     }
+    
+    // 確実に実行させる
+    initLIFF();
 
     socket.on('slots-updated', (data) => {
       globalSlots = data.slots;

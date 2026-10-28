@@ -77,15 +77,14 @@
     let currentUserId = "";
     let currentDisplayName = "ゲスト";
     let globalSlots = [];
+    let currentSlotIndex = 0;
     let selectedSlot = null;
     let selectedCount = 1;
 
-    // LIFF初期化
     async function initLIFF() {
       const userStatusDiv = document.getElementById('userStatus');
       try {
-        await liff.init({ liffId: "2012246919-cYjIOJwZ" }); // お手元のLIFF ID
-        
+        await liff.init({ liffId: "2012246919-cYjIOJwZ" });
         if (liff.isInClient()) {
           if (!liff.isLoggedIn()) {
             liff.login();
@@ -99,16 +98,14 @@
           userStatusDiv.innerText = "※ブラウザから閲覧中（LINE通知は届きません）";
         }
       } catch (err) {
-        console.error("LIFF初期化失敗:", err);
         userStatusDiv.innerText = "※LINE連携スキップ（ブラウザモード）";
       }
     }
-    
-    // 確実に実行させる
     initLIFF();
 
     socket.on('slots-updated', (data) => {
       globalSlots = data.slots;
+      currentSlotIndex = data.currentSlotIndex;
       renderSlots();
     });
 
@@ -116,6 +113,7 @@
       .then(res => res.json())
       .then(data => {
         globalSlots = data.slots;
+        currentSlotIndex = data.currentSlotIndex;
         renderSlots();
       });
 
@@ -123,12 +121,15 @@
       const slotList = document.getElementById('slotList');
       slotList.innerHTML = '';
 
-      if (globalSlots.length === 0) {
+      // 進行済みの過去枠を非表示にし、現在以降の枠のみを表示
+      const activeSlots = globalSlots.slice(currentSlotIndex);
+
+      if (activeSlots.length === 0) {
         slotList.innerHTML = '<div style="color: #777; text-align: center; padding: 20px 0;">現在受付中の枠はありません</div>';
         return;
       }
 
-      globalSlots.forEach(slot => {
+      activeSlots.forEach(slot => {
         const remaining = slot.capacity - slot.booked;
         const div = document.createElement('div');
         div.className = 'slot-item';

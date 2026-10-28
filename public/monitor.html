@@ -3,20 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>『LINK』体験予約 - リアルタイム状況</title>
+  <title>『LINK』体験 - 予約状況</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body { font-family: sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }
-    .container { max-width: 600px; margin: 0 auto; }
-    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
-    h1 { font-size: 20px; color: #333; text-align: center; margin-bottom: 20px; }
+    .container { max-width: 650px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { font-size: 20px; color: #333; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #06c755; padding-bottom: 10px; }
     
-    /* 枠リスト */
-    .slot-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; background: #fff; }
-    .slot-time { font-size: 16px; font-weight: bold; color: #333; }
-    .slot-capacity { font-size: 14px; color: #555; }
+    .monitor-list { display: flex; flex-direction: column; gap: 12px; }
+    .monitor-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .slot-time { font-size: 18px; font-weight: bold; color: #333; }
+    .slot-status { display: flex; align-items: center; gap: 15px; }
+    .capacity-text { font-size: 16px; color: #555; font-weight: bold; }
     
-    .symbol-info { font-size: 15px; font-weight: bold; }
+    .symbol { font-size: 22px; font-weight: bold; width: 30px; text-align: center; }
     .symbol-circle { color: #06c755; }
     .symbol-triangle { color: #ff9800; }
     .symbol-cross { color: #f44336; }
@@ -24,58 +34,63 @@
 </head>
 <body>
   <div class="container">
-    <h1>『LINK』体験 予約・進行状況</h1>
-    
     <div class="card">
-      <div style="font-weight: bold; margin-bottom: 12px; color: #555;">予約状況一覧</div>
-      <div id="monitorSlotList">読み込み中...</div>
+      <h1>『LINK』体験 リアルタイム予約状況</h1>
+      <div id="monitorList" class="monitor-list">読み込み中...</div>
     </div>
   </div>
 
   <script>
     const socket = io();
 
-    // データ受信時に画面を更新
     socket.on('slots-updated', (data) => {
-      updateMonitor(data.slots);
+      renderMonitor(data.slots, data.currentSlotIndex);
     });
 
     fetch('/api/data')
       .then(res => res.json())
       .then(data => {
-        updateMonitor(data.slots);
+        renderMonitor(data.slots, data.currentSlotIndex);
       });
 
-    function updateMonitor(slots) {
-      const slotList = document.getElementById('monitorSlotList');
-      slotList.innerHTML = '';
+    function renderMonitor(slots, currentSlotIndex) {
+      const monitorList = document.getElementById('monitorList');
+      monitorList.innerHTML = '';
 
-      if (slots.length === 0) {
-        slotList.innerHTML = '<div style="color: #777; text-align: center; padding: 20px 0;">現在登録されている枠はありません</div>';
+      // 現在進行中の枠（currentSlotIndex）以降のみに絞り込んで過去の枠を非表示にする
+      const activeSlots = slots.slice(currentSlotIndex);
+
+      if (activeSlots.length === 0) {
+        monitorList.innerHTML = '<div style="text-align: center; color: #777; padding: 20px;">本日の案内枠は終了いたしました</div>';
         return;
       }
 
-      slots.forEach(slot => {
+      activeSlots.forEach(slot => {
         const remaining = slot.capacity - slot.booked;
         const div = document.createElement('div');
-        div.className = 'slot-item';
+        div.className = 'monitor-item';
 
+        let capacityText = `残り枠数：${remaining}/${slot.capacity}`;
         let symbolHtml = '';
+
         if (remaining >= 2) {
-          symbolHtml = `<span class="symbol-info symbol-circle">〇</span>`;
+          symbolHtml = `<span class="symbol symbol-circle">〇</span>`;
         } else if (remaining === 1) {
-          symbolHtml = `<span class="symbol-info symbol-triangle">△</span>`;
+          symbolHtml = `<span class="symbol symbol-triangle">△</span>`;
         } else {
-          symbolHtml = `<span class="symbol-info symbol-cross" style="font-size: 13px;">キャンセル待ち</span>`;
+          capacityText = `キャンセル待ち`;
+          symbolHtml = `<span class="symbol symbol-cross">✕</span>`;
         }
 
         div.innerHTML = `
-          <span class="slot-time">${slot.time}</span>
-          <span class="slot-capacity">残り枠数: ${remaining}/${slot.capacity}</span>
-          ${symbolHtml}
+          <div class="slot-time">${slot.time}</div>
+          <div class="slot-status">
+            <span class="capacity-text">${capacityText}</span>
+            ${symbolHtml}
+          </div>
         `;
 
-        slotList.appendChild(div);
+        monitorList.appendChild(div);
       });
     }
   </script>

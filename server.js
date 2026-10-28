@@ -24,6 +24,7 @@ app.get('/admin', (req, res) => res.sendFile(__dirname + '/public/admin.html'));
 app.get('/manager', (req, res) => res.sendFile(__dirname + '/public/manager.html'));
 app.get('/scanner', (req, res) => res.sendFile(__dirname + '/public/scanner.html'));
 
+// 全データ取得（管理者画面用：全枠・全予約を返却）
 app.get('/api/data', (req, res) => {
   res.json({ slots, reservations, currentSlotIndex });
 });
@@ -50,19 +51,13 @@ app.delete('/api/admin/slots/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// API: 次の枠へ進行（前の枠を自動削除し、予約画面等から消去する）
+// API: 次の枠へ進行（currentSlotIndex を進める。枠自体は削除せず保持）
 app.post('/api/admin/next-slot', (req, res) => {
   if (slots.length === 0) return res.json({ success: false, error: '枠が登録されていません' });
 
   if (currentSlotIndex < slots.length - 1) {
-    // 終わった枠（インデックス0からcurrentSlotIndexまで）を配列から削除し、対応する予約もクリアする
-    const removedSlots = slots.splice(0, 1); // 先頭の枠を削除
-    const removedSlotIds = removedSlots.map(s => s.id);
-    reservations = reservations.filter(r => !removedSlotIds.includes(r.slotId));
-    
-    // currentSlotIndexは先頭が消えるため0のままか維持される
-    if (currentSlotIndex > 0) currentSlotIndex--;
-
+    currentSlotIndex++;
+    // クライアント側に更新イベントを発行（クライアント側で currentSlotIndex 以降の枠のみフィルタリング表示する）
     io.emit('slots-updated', { slots, reservations, currentSlotIndex });
     res.json({ success: true, currentSlotIndex });
   } else {

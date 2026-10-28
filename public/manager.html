@@ -9,7 +9,6 @@
     * { box-sizing: border-box; }
     body { font-family: sans-serif; background: #f4f6f8; margin: 0; padding: 15px; height: 100vh; overflow: hidden; }
     
-    /* iPadの画面全体に合わせたレイアウト */
     .ipad-container {
       display: flex;
       gap: 15px;
@@ -19,7 +18,6 @@
       margin: 0 auto;
     }
 
-    /* 左側：時間枠一覧 */
     .left-pane {
       width: 350px;
       background: #fff;
@@ -47,7 +45,6 @@
     .slot-card-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; color: #333; margin-bottom: 4px; }
     .slot-card-sub { font-size: 13px; color: #666; display: flex; justify-content: space-between; }
 
-    /* 右側：選択中の枠の予約者詳細 ＆ アクション */
     .right-pane {
       flex: 1;
       background: #fff;
@@ -60,7 +57,6 @@
       overflow: hidden;
     }
     
-    /* 右上アクションバー */
     .action-bar {
       display: flex;
       justify-content: space-between;
@@ -81,13 +77,11 @@
     .btn-call:hover { background: #138496; }
     .btn:disabled { background: #cccccc; cursor: not-allowed; }
 
-    /* 右下：予約者一覧テーブル */
     .table-scroll-area { flex: 1; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
     th { background: #f8f9fa; color: #333; font-weight: bold; position: sticky; top: 0; z-index: 1; }
 
-    /* 受付完了ポップアップ */
     #popupOverlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center; align-items: center;
@@ -101,7 +95,6 @@
 </head>
 <body>
   <div class="ipad-container">
-    <!-- 左側：時間枠一覧 -->
     <div class="left-pane">
       <div class="pane-title">予約時間枠一覧</div>
       <div id="slotScrollArea" class="slot-scroll-area">
@@ -109,7 +102,6 @@
       </div>
     </div>
 
-    <!-- 右側：選択中の枠の予約者詳細 ＆ 操作ボタン -->
     <div class="right-pane">
       <div class="action-bar">
         <div>
@@ -132,16 +124,15 @@
               <th>人数</th>
               <th>受付状況</th>
             </tr>
-          Ref:
-            <tbody id="managerReservationTable">
-              <tr><td colspan="4" style="text-align: center; color: #777;">左側の時間枠を選択してください</td></tr>
-            </tbody>
+          </thead>
+          <tbody id="managerReservationTable">
+            <tr><td colspan="4" style="text-align: center; color: #777;">左側の時間枠を選択してください</td></tr>
+          </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- 受付完了ポップアップ -->
   <div id="popupOverlay">
     <div class="popup-card">
       <div class="popup-title">受付完了！</div>
@@ -154,10 +145,9 @@
     let globalSlots = [];
     let globalReservations = [];
     let currentSlotIndex = 0;
-    let selectedSlotId = null; // 現在選択している枠のID
+    let selectedSlotId = null;
 
     socket.on('slots-updated', (data) => {
-      // 受付済みに変わった瞬間を検知してポップアップ表示
       data.reservations.forEach(newRes => {
         const oldRes = globalReservations.find(r => r.id === newRes.id);
         if (newRes.checked && (!oldRes || !oldRes.checked)) {
@@ -169,9 +159,9 @@
       globalReservations = data.reservations;
       currentSlotIndex = data.currentSlotIndex;
       
-      // デフォルト選択の維持または自動選択
-      if (!selectedSlotId && globalSlots.length > 0) {
-        selectedSlotId = globalSlots[currentSlotIndex] ? globalSlots[currentSlotIndex].id : globalSlots[0].id;
+      const activeSlots = globalSlots.slice(currentSlotIndex);
+      if (!selectedSlotId || !activeSlots.some(s => s.id === selectedSlotId)) {
+        selectedSlotId = activeSlots.length > 0 ? activeSlots[0].id : null;
       }
       renderManager();
     });
@@ -182,8 +172,10 @@
         globalSlots = data.slots;
         globalReservations = data.reservations;
         currentSlotIndex = data.currentSlotIndex;
-        if (globalSlots.length > 0) {
-          selectedSlotId = globalSlots[currentSlotIndex] ? globalSlots[currentSlotIndex].id : globalSlots[0].id;
+        
+        const activeSlots = globalSlots.slice(currentSlotIndex);
+        if (activeSlots.length > 0) {
+          selectedSlotId = activeSlots[0].id;
         }
         renderManager();
       });
@@ -209,26 +201,28 @@
 
       slotScrollArea.innerHTML = '';
 
-      if (globalSlots.length === 0) {
-        slotScrollArea.innerHTML = '<div style="color: #777; text-align: center; padding: 20px;">登録枠がありません</div>';
+      // 進行済みの過去枠を除外して現在以降の枠のみ表示
+      const activeSlots = globalSlots.slice(currentSlotIndex);
+
+      if (activeSlots.length === 0) {
+        slotScrollArea.innerHTML = '<div style="color: #777; text-align: center; padding: 20px;">有効な枠がありません</div>';
         selectedSlotTitle.innerText = "枠がありません";
         tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #777;">予約データがありません</td></tr>';
+        callBtn.disabled = true;
         return;
       }
 
-      // 次の枠ボタンの制御
       if (currentSlotIndex >= globalSlots.length - 1) {
         nextSlotBtn.innerText = "最終枠";
       } else {
         nextSlotBtn.innerText = "次の枠へ進行";
       }
 
-      // 左側の時間枠一覧を描画
-      globalSlots.forEach((slot, index) => {
+      activeSlots.forEach((slot, index) => {
         const div = document.createElement('div');
         div.className = 'slot-card';
         if (slot.id === selectedSlotId) div.classList.add('selected');
-        if (index === currentSlotIndex) div.classList.add('current-active');
+        if (index === 0) div.classList.add('current-active'); // 先頭が現在の案内枠
 
         div.onclick = () => {
           selectedSlotId = slot.id;
@@ -238,8 +232,8 @@
         div.innerHTML = `
           <div class="slot-card-header">
             <span>${slot.time}</span>
-            <span style="font-size: 13px; color: ${index === currentSlotIndex ? '#d35400' : '#555'};">
-              ${index === currentSlotIndex ? '★案内中' : ''}
+            <span style="font-size: 13px; color: ${index === 0 ? '#d35400' : '#555'};">
+              ${index === 0 ? '★案内中' : ''}
             </span>
           </div>
           <div class="slot-card-sub">
@@ -249,10 +243,9 @@
         slotScrollArea.appendChild(div);
       });
 
-      // 選択中の枠のデータを取得
-      const targetSlot = globalSlots.find(s => s.id === selectedSlotId) || globalSlots[currentSlotIndex];
+      const targetSlot = globalSlots.find(s => s.id === selectedSlotId) || activeSlots[0];
       if (targetSlot) {
-        selectedSlotTitle.innerText = targetSlot.time + (targetSlot.id === globalSlots[currentSlotIndex]?.id ? ' (案内中)' : '');
+        selectedSlotTitle.innerText = targetSlot.time + (targetSlot.id === activeSlots[0]?.id ? ' (案内中)' : '');
         callBtn.disabled = false;
 
         const targetReservations = globalReservations.filter(r => r.slotId === targetSlot.id);
@@ -278,17 +271,11 @@
       }
     }
 
-    // 「次の枠へ進行」ボタン（前の枠を完全削除・非表示にする）
     document.getElementById('nextSlotBtn').onclick = async () => {
       try {
         const res = await fetch('/api/admin/next-slot', { method: 'POST' });
         const data = await res.json();
-        if (data.success) {
-          // 進んだ後の新しい現在進行中の枠を自動選択
-          if (globalSlots[data.currentSlotIndex]) {
-            selectedSlotId = globalSlots[data.currentSlotIndex].id;
-          }
-        } else {
+        if (!data.success) {
           alert(data.error || "これ以上先の枠はありません");
         }
       } catch (err) {
@@ -296,7 +283,6 @@
       }
     };
 
-    // 「LINE呼び出し」ボタン
     document.getElementById('callBtn').onclick = async () => {
       if (!selectedSlotId) return;
       if (!confirm("選択中の時間枠の予約者全員にLINEリマインドを送信しますか？")) return;

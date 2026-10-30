@@ -11,7 +11,7 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static('public'));
 
-const ADMIN_PIN = "1234";
+const ADMIN_PIN = "703";
 
 let slots = [];
 let reservations = [];
